@@ -15,9 +15,9 @@ spriteImg.onload = function () {
 };
 spriteImg.src = "images/running.png";
 var sprites = {
-  run = false,
-  jump = false,
-  climb = false
+  run: false,
+  jump: false,
+  climb: false
 }
 
 // Handle keyboard controls
