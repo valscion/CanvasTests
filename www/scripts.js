@@ -7,11 +7,14 @@ var ctx = canvas.getContext("2d");
 
 // Store information about player
 var plr = {
-  anim : "stance",
-  x : 100,
-  y : 100,
-  frame : 0,
-  jumping : false
+  x : 100,          // -- Player x-coordinate
+  y : 100,          // -- Player y-coordinate
+  speed : 128,      // Movement, pixels per second
+  anim : "stance",  // Current player animation
+  frame : 0.0,      // What frame are we currently running in the animation (will be rounded)
+  jumping : false,  // Is the player currently mid-air
+  climbing : 0      // Is the player currently climbing in ladders. 
+                    // 0 = not, 1 = yes, 2 = yes and moves horizontally
 }
 
 // Object to fit all sprites in
@@ -90,18 +93,19 @@ function drawPlayer() {
     return false;
   }
   
-  switch( plr.sprite ) {
+  var frame = Math.round( plr.frame );
+  switch( plr.anim ) {
     case "runright":
-      ctx.drawImage( sprites.runright, plr.frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
+      ctx.drawImage( sprites.runright, frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     case "runleft":
-      ctx.drawImage( sprites.runleft, plr.frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
+      ctx.drawImage( sprites.runleft, frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     case "jump":
-      ctx.drawImage( sprites.jump, plr.frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
+      ctx.drawImage( sprites.jump, frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     case "climb":
-      ctx.drawImage( sprites.climb, plr.frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
+      ctx.drawImage( sprites.climb, frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     case "stance":
       ctx.drawImage( sprites.stance, 0, 0, 16, 24, plr.x, plr.y, 16, 24 );
@@ -197,17 +201,103 @@ var runFlashes = function(delta) {
 }
 
 // Update keys
-var update = function() {
+var update = function( modifier ) {
+  if( 19 in keysDown ) {
+    // -- Pause/break --
+    // Emergency stop. Need to refresh page to start the script again.
+    clearInterval( mainInterval );
+  }
   if( 32 in keysDown) {
     // -- Return --
     // Toggle maintext flash
     flashes.maintext.toggled = !flashes.maintext.toggled;
     delete keysDown[32];
   }
-  if( 19 in keysDown ) {
-    // -- Pause/break --
-    // Emergency stop. Need to refresh page to start the script again.
-    clearInterval( mainInterval );
+  
+  // Running can only happen when player isn't climbing
+  if ( plr.climbing == 0 ) {
+    // Controlling left/right movement
+    if (37 in keysDown) {
+      // -- Left arrow --
+      plr.x -= plr.speed * modifier;
+      plr.anim = "runleft";
+      plr.frame += plr.speed * modifier / 8;
+    } else if (39 in keysDown) {
+      // -- Right arrow --
+      plr.x += plr.speed * modifier;
+      plr.anim = "runright";
+      plr.frame += plr.speed * modifier / 8;
+    } else {
+      // If player isn't moving, play stance animation.
+      plr.anim = "stance";
+      // Also reset running frame.
+      plr.frame = 0.0
+    }
+  } else {
+    // If the player is climbing, we may move horizontally, but slower than normal
+    
+    if (37 in keysDown) {
+      // -- Left arrow --
+      plr.x -= plr.speed * modifier / 2;
+      plr.frame += plr.speed * modifier / 12;
+      // We move horizontally
+      plr.climbing = 2;
+    } else if (39 in keysDown) {
+      // -- Right arrow --
+      plr.x += plr.speed * modifier / 2;
+      plr.frame += plr.speed * modifier / 12;
+      // We move horizontally
+      plr.climbing = 2;
+    } else {
+      // We're not moving horizontally
+      plr.climbing = 1;
+    }
+  }
+  
+  // Controlling climbing ladders
+	if (38 in keysDown) {
+    // -- Up arrow --
+    // Climb down the ladders
+		plr.y -= plr.speed/2 * modifier;
+    // If we weren't climbing before, reset framecounter
+    if ( plr.climbing == 0 ) {
+      plr.climbing = 1;
+      plr.frame = 0;
+      plr.anim = "climb";
+    }
+    // Only if we don't move horizontally, we animate the character here.
+    if ( plr.climbing == 1 ) {
+      plr.frame += plr.speed * modifier / 12;
+    }
+	} else if (40 in keysDown) {
+    // -- Down arrow --
+		plr.y += plr.speed/2 * modifier;
+    if( plr.climbing == 0 ) {
+      plr.climbing = 1;
+      plr.frame = 0;
+      plr.anim = "climb";
+    }
+    if ( plr.climbing == 2 ) {
+      // If we move horizontally, we need to double the animation speed,
+      // because player is already running an animation in different direction.
+      plr.frame -= plr.speed * modifier / 6;
+    } else {
+      plr.frame -= plr.speed * modifier / 12;
+    }
+	}
+  
+  // Check frame limits
+  if( plr.anim == "runleft" || plr.anim == "runright" ) {
+    if( plr.frame > 15 ) { plr.frame = 0.0; }
+  } else if ( plr.anim == "climb" ) {
+    if( plr.frame < 0 ) { plr.frame = 5; }
+    else if ( plr.frame > 5.0 ) { plr.frame = 0.0; }
+  }
+  
+  
+  // Ugly hack to release climbing animation
+  if ( 13 in keysDown ) {
+    plr.climbing = false;
   }
 }
 
@@ -216,7 +306,7 @@ var main = function () {
   var now = Date.now();
   var delta = now - then;
 
-  update();
+  update( delta / 1000 );
   runFlashes( delta / 1000 );
   render();
 
