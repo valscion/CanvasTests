@@ -114,24 +114,17 @@ var runFlashes = function(delta) {
 }
 
 // Update keys
-var update = function(delta) {
+var update = function() {
   if( 32 in keysDown) {
     // -- Return --
     // Toggle maintext flash
     flashes.maintext.toggled = !flashes.maintext.toggled;
     delete keysDown[32];
   }
-  if( 27 in keysDown ) {
-    // -- Escape --
-    // Pause/resume main interval
-    if( mainRunning ) {
-      clearInterval( mainInterval );
-      mainRunning = false;
-    } else {
-      mainInterval = setInterval(main, 10);
-      mainRunning = true;
-    }
-    delete keysDown[27];
+  if( 19 in keysDown ) {
+    // -- Pause/break --
+    // Emergency stop. Need to refresh page to start the script again.
+    clearInterval( mainInterval );
   }
 }
 
@@ -140,7 +133,7 @@ var main = function () {
   var now = Date.now();
   var delta = now - then;
 
-  update(delta / 1000);
+  update();
   runFlashes( delta / 1000 );
   render();
 
@@ -162,5 +155,4 @@ var reset = function() {
 reset();
 createFlash( "maintext", 1.0 );
 var then = Date.now();
-var mainRunning = true;
 var mainInterval = setInterval(main, 10); // Run (almost) as fast as possible
