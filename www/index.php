@@ -40,7 +40,7 @@
   <script src="//ajax.googleapis.com/ajax/libs/jquery/1.6.3/jquery.min.js"></script>
   <!-- <script>window.jQuery || document.write("<script src='/js/libs/jquery-1.6.3.min.js'>\x3C/script>")</script> -->
 
-  <script src="scripts.js"></script>
+  <script src="scripts.js?trick=<?=filemtime('scripts.js')?>"></script>
   
   <!-- mathiasbynens.be/notes/async-analytics-snippet -->
   <script>
