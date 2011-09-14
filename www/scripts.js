@@ -5,10 +5,17 @@
 var canvas = $("#maincanvas")[0];
 var ctx = canvas.getContext("2d");
 
+// Information about camera
+var camera = {
+  x : 0,
+  y : 0,
+  speed : 64
+}
+
 // Store information about player
 var plr = {
-  x : 100,          // -- Player x-coordinate
-  y : 100,          // -- Player y-coordinate
+  x : 312,          // -- Player x-coordinate
+  y : 228,          // -- Player y-coordinate
   speed : 128,      // Movement, pixels per second
   anim : "stance",  // Current player animation
   frame : 0.0,      // What frame are we currently running in the animation (will be rounded)
@@ -86,7 +93,7 @@ function loadSprites() {
   sprites.climb.src = "images/climb.png";
 }
 
-
+// Draw player
 function drawPlayer() {
   // Check whether all sprites are loaded
   if( allSpritesLoaded != true ) {
@@ -146,7 +153,7 @@ var flashes = {};
 var render = function() {
   
   // Clear the screen
-  ctx.clearRect(0,0,640,480);
+  ctx.clearRect(-camera.x,-camera.y,640,480);
   
   // Draw some text
   // ...add some flash
@@ -294,11 +301,19 @@ var update = function( modifier ) {
     else if ( plr.frame > 5.0 ) { plr.frame = 0.0; }
   }
   
+  // Move the "camera" with WASD
+  camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed;
+  camera.y += ( ( 83 in keysDown ) - ( 87 in keysDown ) ) * modifier * camera.speed;
   
   // Ugly hack to release climbing animation
   if ( 13 in keysDown ) {
     plr.climbing = false;
   }
+  
+  // Position the canvas according to camera.x and camera.y
+  ctx.restore();
+  ctx.save();
+  ctx.translate( camera.x, camera.y );
 }
 
 // Main loop
