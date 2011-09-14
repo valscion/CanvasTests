@@ -5,37 +5,114 @@
 var canvas = $("#maincanvas")[0];
 var ctx = canvas.getContext("2d");
 
+// Store information about player
+var plr = {
+  anim : "stance",
+  x : 100,
+  y : 100,
+  frame : 0,
+  jumping : false
+}
 
-// Load sprites, one part is 16x24
-var spriteLoaded = false;
-var spriteImg = new Image();
-spriteImg.onload = function () {
-  spriteLoaded = true;
-};
-spriteImg.src = "images/running.png";
+// Object to fit all sprites in
+var sprites = {
+  stance : null,
+  runright : null,
+  runleft : null,
+  jumpright : null,
+  jumpleft : null,
+  climb : null
+}
+var spritesLoaded = 0;        // Amount of sprites already loaded
+var allSpritesLoaded = false; // Are all sprites loaded
 
-function drawSprite(o) {
-  if( typeof o.sprite == 'undefined' ||
-      typeof o.x == 'undefined' ||
-      typeof o.y == 'undefined' ||
-      typeof o.frame == 'undefined' )
-  {
+// Load the sprites, one part is 16x24
+function loadSprites() {
+  // Stance
+  sprites.stance = new Image();
+    sprites.stance.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.stance.src = "images/stance.png";
+  
+  // Run right
+  sprites.runright = new Image();
+    sprites.runright.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.runright.src = "images/run_right.png";
+  
+  // Run left
+  sprites.runleft = new Image();
+    sprites.runleft.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.runleft.src = "images/run_left.png";
+  
+  // Jump right
+  sprites.jumpright = new Image();
+    sprites.jumpright.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.jumpright.src = "images/jump_right.png";
+  
+  // Jump left
+  sprites.jumpleft = new Image();
+    sprites.jumpleft.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.jumpleft.src = "images/jump_left.png";
+  
+  // Climbing
+  sprites.climb = new Image();
+    sprites.climb.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.climb.src = "images/climb.png";
+}
+
+
+function drawPlayer() {
+  // Check whether all sprites are loaded
+  if( allSpritesLoaded != true ) {
     return false;
   }
-  switch( o.sprite ) {
+  
+  switch( plr.sprite ) {
     case "runright":
+      ctx.drawImage( sprites.runright, plr.frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     case "runleft":
+      ctx.drawImage( sprites.runleft, plr.frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     case "jump":
+      ctx.drawImage( sprites.jump, plr.frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     case "climb":
+      ctx.drawImage( sprites.climb, plr.frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
+      break;
+    case "stance":
+      ctx.drawImage( sprites.stance, 0, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     default:
+      ctx.drawImage( sprites.stance, 0, 0, 16, 24, plr.x, plr.y, 16, 24 );
       return false;
   }
   return true;
 }
+
 
 // Handle keyboard controls
 var keysDown = {};
@@ -63,19 +140,24 @@ function createFlash( key, speed ) {
 var flashes = {};
 
 var render = function() {
-  var tmp = Math.round( 64.0 + flashes.maintext.val * 191 );
-  ctx.fillStyle = "rgb("+0+","+0+","+0+")";
-  ctx.fillRect(0,0,640,480);
+  
+  // Clear the screen
+  ctx.clearRect(0,0,640,480);
   
   // Draw some text
+  // ...add some flash
+  var tmp = Math.round( 64.0 + flashes.maintext.val * 191 );
   ctx.fillStyle = "rgb("+tmp+","+tmp+","+tmp+")";
   ctx.font = "24px Helvetica";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText("Hei, maailma!", 32, 32);
   
+  // Draw the dude
+  drawPlayer();
   
-  // Draw some debug-info
+  
+  /* // Draw some debug-info
   ctx.fillStyle = "rgb(128,128,128)";
   ctx.font = "12px Helvetica";
   ctx.textAlign = "right";
@@ -89,6 +171,7 @@ var render = function() {
   ctx.fillText(flashes.maintext.val, 590, 46 );
   ctx.fillText(flashes.maintext.mod, 590, 60 );
   ctx.fillText(flashes.maintext.speed, 590, 74 );
+  */
 }
 
 // Update all flashes
@@ -152,6 +235,7 @@ var reset = function() {
 }
 
 // Run it!
+loadSprites();
 reset();
 createFlash( "maintext", 1.0 );
 var then = Date.now();
