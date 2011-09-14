@@ -6,7 +6,7 @@ var canvas = $("#maincanvas")[0];
 var ctx = canvas.getContext("2d");
 
 
-// Lataa spritet, yksittäinen kuva on 16x24
+// Load sprites, one part is 16x24
 var spriteLoaded = false;
 var spriteImg = new Image();
 spriteImg.onload = function () {
@@ -50,13 +50,13 @@ addEventListener("keyup", function (e) {
   }
 }, false);
 
-// Välkäytys
+// Creating a new flash and appending it to the flashes-object
 function createFlash( key, speed ) {
-  this.toggled = false; // Onko väläytys käynnissä
-  this.val = 0.0;       // Tämänhetkinen väläytysarvo
-  this.mod = 1;         // Mennäänkö tummempaan vai kirkkaampaan.
-  this.running = false; // Pyöriikö väläytys
-  this.speed = speed;   // Välähdyksen nopeus sekunneissa
+  this.toggled = false; // Is flash toggled
+  this.val = 0.0;       // Current value of the flash (from 0.0 to 1.0)
+  this.mod = 1;         // Are we going higher or lower
+  this.running = false; // Is the flash running
+  this.speed = speed;   // How fast does flash go from 0.0 to 1.0 in seconds
   
   flashes[key] = this;
 }
@@ -67,13 +67,15 @@ var render = function() {
   ctx.fillStyle = "rgb("+0+","+0+","+0+")";
   ctx.fillRect(0,0,640,480);
   
-  // Tekstiä
+  // Draw some text
   ctx.fillStyle = "rgb("+tmp+","+tmp+","+tmp+")";
   ctx.font = "24px Helvetica";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText("Hei, maailma!", 32, 32);
   
+  
+  // Draw some debug-info
   ctx.fillStyle = "rgb(128,128,128)";
   ctx.font = "12px Helvetica";
   ctx.textAlign = "right";
@@ -89,6 +91,7 @@ var render = function() {
   ctx.fillText(flashes.maintext.speed, 590, 74 );
 }
 
+// Update all flashes
 var runFlashes = function(delta) {
   for( f in flashes ) {
     var flash = flashes[f];
@@ -110,9 +113,11 @@ var runFlashes = function(delta) {
   }
 }
 
-// Päivitykset
+// Update keys
 var update = function(delta) {
   if( 32 in keysDown) {
+    // -- Return --
+    // Toggle maintext flash
     flashes.maintext.toggled = !flashes.maintext.toggled;
     delete keysDown[32];
   }
@@ -126,10 +131,11 @@ var update = function(delta) {
       mainInterval = setInterval(main, 10);
       mainRunning = true;
     }
+    delete keysDown[27];
   }
 }
 
-// Pääsilmukka
+// Main loop
 var main = function () {
   var now = Date.now();
   var delta = now - then;
@@ -141,7 +147,7 @@ var main = function () {
   then = now;
 };
 
-// Resetointi
+// Reset
 var reset = function() {
   for( f in flashes ) {
     var flash = flashes[f];
@@ -152,9 +158,9 @@ var reset = function() {
   }
 }
 
-// Rullati rullaa!
+// Run it!
 reset();
 createFlash( "maintext", 1.0 );
 var then = Date.now();
 var mainRunning = true;
-var mainInterval = setInterval(main, 10); // (melkein) niin nopsaan kuin mahdollista
+var mainInterval = setInterval(main, 10); // Run (almost) as fast as possible
