@@ -2,22 +2,39 @@
  * Author: Vesa "VesQ" Laakso
  */
 
-$(document).ready( function () {
 var canvas = $("#maincanvas")[0];
 var ctx = canvas.getContext("2d");
 
 
-// Load sprites, one is 16x24
+// Lataa spritet, yksittÃ¤inen kuva on 16x24
 var spriteLoaded = false;
 var spriteImg = new Image();
 spriteImg.onload = function () {
-	spriteLoaded = true;
+  spriteLoaded = true;
 };
 spriteImg.src = "images/running.png";
-var sprites = {
-  run: false,
-  jump: false,
-  climb: false
+
+function drawSprite(o) {
+  if( typeof o.sprite == 'undefined' ||
+      typeof o.x == 'undefined' ||
+      typeof o.y == 'undefined' ||
+      typeof o.frame == 'undefined' )
+  {
+    return false;
+  }
+  switch( o.sprite ) {
+    case "runright":
+      break;
+    case "runleft":
+      break;
+    case "jump":
+      break;
+    case "climb":
+      break;
+    default:
+      return false;
+  }
+  return true;
 }
 
 // Handle keyboard controls
@@ -33,21 +50,24 @@ addEventListener("keyup", function (e) {
   }
 }, false);
 
-// Välkäytys
-var flash = {
-  toggled: false,   // Onko väläytys käynnissä
-  val: 0.0,         // Tämänhetkinen väläytysarvo
-  mod: 1,           // Mennäänkö tummempaan vai kirkkaampaan.
-  running: false,   // Pyöriikö väläytys
-  speed: 1.0        // Välähdyksen nopeus sekunneissa
+// VÃ¤lkÃ¤ytys
+function createFlash( key, speed ) {
+  this.toggled = false; // Onko vÃ¤lÃ¤ytys kÃ¤ynnissÃ¤
+  this.val = 0.0;       // TÃ¤mÃ¤nhetkinen vÃ¤lÃ¤ytysarvo
+  this.mod = 1;         // MennÃ¤Ã¤nkÃ¶ tummempaan vai kirkkaampaan.
+  this.running = false; // PyÃ¶riikÃ¶ vÃ¤lÃ¤ytys
+  this.speed = speed;   // VÃ¤lÃ¤hdyksen nopeus sekunneissa
+  
+  flashes[key] = this;
 }
+var flashes = {};
 
 var render = function() {
-  var tmp = Math.round( 64.0 + flash.val * 191 );
+  var tmp = Math.round( 64.0 + flashes.maintext.val * 191 );
   ctx.fillStyle = "rgb("+0+","+0+","+0+")";
   ctx.fillRect(0,0,640,480);
   
-  // Tekstiä
+  // TekstiÃ¤
   ctx.fillStyle = "rgb("+tmp+","+tmp+","+tmp+")";
   ctx.font = "24px Helvetica";
   ctx.textAlign = "left";
@@ -57,51 +77,65 @@ var render = function() {
   ctx.fillStyle = "rgb(128,128,128)";
   ctx.font = "12px Helvetica";
   ctx.textAlign = "right";
-  ctx.fillText("flash.toggled:", 580, 32 );
-  ctx.fillText("flash.val:", 580, 46 );
-  ctx.fillText("flash.mod:", 580, 60 );
-  ctx.fillText("flash.speed:", 580, 74 );
+  ctx.fillText("flashes.maintext.toggled:", 580, 32 );
+  ctx.fillText("flashes.maintext.val:", 580, 46 );
+  ctx.fillText("flashes.maintext.mod:", 580, 60 );
+  ctx.fillText("flashes.maintext.speed:", 580, 74 );
   
   ctx.textAlign = "left";
-  ctx.fillText(flash.toggled, 590, 32 );
-  ctx.fillText(flash.val, 590, 46 );
-  ctx.fillText(flash.mod, 590, 60 );
-  ctx.fillText(flash.speed, 590, 74 );
+  ctx.fillText(flashes.maintext.toggled, 590, 32 );
+  ctx.fillText(flashes.maintext.val, 590, 46 );
+  ctx.fillText(flashes.maintext.mod, 590, 60 );
+  ctx.fillText(flashes.maintext.speed, 590, 74 );
 }
 
-var runFlash = function(delta) {
-  if( flash.toggled ) {
-    flash.running = true;
-    flash.val = flash.val + delta * flash.mod * flash.speed;
-    if( flash.val > 1.0 ) { flash.val = 1.0; flash.mod = -1; }
-    if( flash.val < 0.0 ) { flash.val = 0.0; flash.mod = 1; }
-  } else if( flash.running ) {
-    flash.mod = 1;
-    flash.val = flash.val - delta * flash.speed;
-    if( flash.val < 0.0 ) {
+var runFlashes = function(delta) {
+  for( f in flashes ) {
+    var flash = flashes[f];
+    if( flash.toggled ) {
+      flash.running = true;
+      flash.val = flash.val + delta * flash.mod * flash.speed;
+      if( flash.val > 1.0 ) { flash.val = 1.0; flash.mod = -1; }
+      if( flash.val < 0.0 ) { flash.val = 0.0; flash.mod = 1; }
+    } else if( flash.running ) {
+      flash.mod = 1;
+      flash.val = flash.val - delta * flash.speed;
+      if( flash.val < 0.0 ) {
+        flash.val = 0.0;
+        flash.running = false;
+      }
+    } else {
       flash.val = 0.0;
-      flash.running = false;
     }
-  } else {
-    flash.val = 0.0;
   }
 }
 
-// Päivitykset
+// PÃ¤ivitykset
 var update = function(delta) {
   if( 32 in keysDown) {
-    flash.toggled = !flash.toggled;
+    flashes.maintext.toggled = !flashes.maintext.toggled;
     delete keysDown[32];
+  }
+  if( 27 in keysDown ) {
+    // -- Escape --
+    // Pause/resume main interval
+    if( mainRunning ) {
+      clearInterval( mainInterval );
+      mainRunning = false;
+    } else {
+      mainInterval = setInterval(main, 10);
+      mainRunning = true;
+    }
   }
 }
 
-// Pääsilmukka
+// PÃ¤Ã¤silmukka
 var main = function () {
   var now = Date.now();
   var delta = now - then;
 
   update(delta / 1000);
-  runFlash( delta / 1000 );
+  runFlashes( delta / 1000 );
   render();
 
   then = now;
@@ -109,12 +143,18 @@ var main = function () {
 
 // Resetointi
 var reset = function() {
-  flash.startVal = 0.0;
+  for( f in flashes ) {
+    var flash = flashes[f];
+    flash.toggled = false;
+    flash.val = 0.0;
+    flash.mod = 1;
+    flash.running = false;
+  }
 }
 
-// Let's play this game!
+// Rullati rullaa!
 reset();
+createFlash( "maintext", 1.0 );
 var then = Date.now();
-setInterval(main, 10); // Execute as fast as possible
-
-});
+var mainRunning = true;
+var mainInterval = setInterval(main, 10); // (melkein) niin nopsaan kuin mahdollista
