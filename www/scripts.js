@@ -2,21 +2,33 @@
  * Author: Vesa "VesQ" Laakso
  */
 
-var canvas = $("#maincanvas")[0];
-var ctx = canvas.getContext("2d");
+// Information about screen
+var scr = {
+  w : 640,            // Canvas width
+  h : 480,            // --||-- height
+  x : 0,              // Calculated when camera is moved
+  y : 0,              // --||--
+  fullscreen : false, // Is fullscreen mode toggled
+  normalw : 0,        // Save normal canvas width
+  normalh : 0         // and height when going to fullscr mode
+}
 
 // Information about camera
 var camera = {
   x : 0,
   y : 0,
-  speed : 64
+  speed : 64,   // Speed of camera when moving it via WASD (in px per sec)
+  border : 20   // How far away from the border of the canvas we may go
+                // with our player before camera is moved
 }
 
 // Store information about player
 var plr = {
-  x : 312,          // -- Player x-coordinate
-  y : 228,          // -- Player y-coordinate
-  speed : 128,      // Movement, pixels per second
+  x : 0,          // -- Player x-coordinate
+  y : 0,          // -- Player y-coordinate
+  speed : 256,      // Movement, pixels per second
+  w : 16,           // Player width
+  h: 24,            // Player height
   anim : "stance",  // Current player animation
   frame : 0.0,      // What frame are we currently running in the animation (will be rounded)
   jumping : false,  // Is the player currently mid-air
@@ -35,6 +47,17 @@ var sprites = {
 }
 var spritesLoaded = 0;        // Amount of sprites already loaded
 var allSpritesLoaded = false; // Are all sprites loaded
+
+// Create the canvas
+var canvas = document.createElement("canvas");
+var ctx = canvas.getContext("2d");
+canvas.width = scr.w;
+canvas.height = scr.h;
+$("#canvascontainer")[0].appendChild(canvas);
+
+// Set canvas' containers width and height
+$("#canvascontainer").css( 'width', scr.w );
+$("#canvascontainer").css( 'height', scr.h );
 
 // Load the sprites, one part is 16x24
 function loadSprites() {
@@ -128,15 +151,23 @@ function drawPlayer() {
 // Handle keyboard controls
 var keysDown = {};
 
-addEventListener("keydown", function (e) {
+$(document.body).keydown( function (e) {
+  if( e.keyCode != 122 ) {
+    // Don't prevent fullscr mode
+    e.preventDefault();
+  }
   keysDown[e.keyCode] = true;
-}, false);
+});
 
-addEventListener("keyup", function (e) {
+$(document.body).keyup( function (e) {
+  if( e.keyCode != 122 ) {
+    // Don't prevent fullscr mode
+    e.preventDefault();
+  }
   if( e.keyCode in keysDown ) {
     delete keysDown[e.keyCode];
   }
-}, false);
+});
 
 // Creating a new flash and appending it to the flashes-object
 function createFlash( key, speed ) {
@@ -150,10 +181,11 @@ function createFlash( key, speed ) {
 }
 var flashes = {};
 
+// Render all stuff to screen
 var render = function() {
   
   // Clear the screen
-  ctx.clearRect(-camera.x,-camera.y,640,480);
+  ctx.clearRect(-camera.x,-camera.y,scr.w,scr.h);
   
   // Draw some text
   // ...add some flash
@@ -162,60 +194,59 @@ var render = function() {
   ctx.font = "24px Helvetica";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillText("Hei, maailma!", 32, 32);
+  ctx.fillText("Hei, maailma!", 0, 0);
   
   // Draw the dude
   drawPlayer();
   
   
-  /* // Draw some debug-info
+  // Draw some debug-info
   ctx.fillStyle = "rgb(128,128,128)";
   ctx.font = "12px Helvetica";
   ctx.textAlign = "right";
-  ctx.fillText("flashes.maintext.toggled:", 580, 32 );
-  ctx.fillText("flashes.maintext.val:", 580, 46 );
-  ctx.fillText("flashes.maintext.mod:", 580, 60 );
-  ctx.fillText("flashes.maintext.speed:", 580, 74 );
+  ctx.fillText("plr.x:", scr.x + scr.w-40, scr.y );
+  ctx.fillText("plr.y:", scr.x + scr.w-40, scr.y + 14 );
+  ctx.fillText("camera.x:", scr.x + scr.w-40, scr.y + 28 );
+  ctx.fillText("camera.y:", scr.x + scr.w-40, scr.y + 42 );
   
   ctx.textAlign = "left";
-  ctx.fillText(flashes.maintext.toggled, 590, 32 );
-  ctx.fillText(flashes.maintext.val, 590, 46 );
-  ctx.fillText(flashes.maintext.mod, 590, 60 );
-  ctx.fillText(flashes.maintext.speed, 590, 74 );
-  */
+  ctx.fillText(plr.x, scr.x + scr.w-30, scr.y );
+  ctx.fillText(plr.y, scr.x + scr.w-30, scr.y + 14 );
+  ctx.fillText(camera.x, scr.x + scr.w-30, scr.y + 28 );
+  ctx.fillText(camera.y, scr.x + scr.w-30, scr.y + 42 );
+  
 }
 
-// Update all flashes
-var runFlashes = function(delta) {
+// Main update function for doing stuff according to delta-time
+var update = function( modifier ) {
+  if( 19 in keysDown ) { // -- Pause/break --
+    // Emergency stop. Need to refresh page to start the script again.
+    clearInterval( mainInterval );
+  }
+  
+  // Update flashes
   for( f in flashes ) {
     var flash = flashes[f];
     if( flash.toggled ) {
       flash.running = true;
-      flash.val = flash.val + delta * flash.mod * flash.speed;
+      flash.val = flash.val + modifier * flash.mod * flash.speed;
       if( flash.val > 1.0 ) { flash.val = 1.0; flash.mod = -1; }
       if( flash.val < 0.0 ) { flash.val = 0.0; flash.mod = 1; }
-    } else if( flash.running ) {
+    }
+    else if( flash.running ) {
       flash.mod = 1;
-      flash.val = flash.val - delta * flash.speed;
+      flash.val = flash.val - modifier * flash.speed;
       if( flash.val < 0.0 ) {
         flash.val = 0.0;
         flash.running = false;
       }
-    } else {
+    }
+    else {
       flash.val = 0.0;
     }
   }
-}
-
-// Update keys
-var update = function( modifier ) {
-  if( 19 in keysDown ) {
-    // -- Pause/break --
-    // Emergency stop. Need to refresh page to start the script again.
-    clearInterval( mainInterval );
-  }
-  if( 32 in keysDown) {
-    // -- Return --
+  
+  if( 32 in keysDown) { // -- Return --
     // Toggle maintext flash
     flashes.maintext.toggled = !flashes.maintext.toggled;
     delete keysDown[32];
@@ -224,46 +255,46 @@ var update = function( modifier ) {
   // Running can only happen when player isn't climbing
   if ( plr.climbing == 0 ) {
     // Controlling left/right movement
-    if (37 in keysDown) {
-      // -- Left arrow --
+    if (37 in keysDown) { // -- Left arrow --
       plr.x -= plr.speed * modifier;
       plr.anim = "runleft";
       plr.frame += plr.speed * modifier / 8;
-    } else if (39 in keysDown) {
-      // -- Right arrow --
+    }
+    else if (39 in keysDown) { // -- Right arrow --
       plr.x += plr.speed * modifier;
       plr.anim = "runright";
       plr.frame += plr.speed * modifier / 8;
-    } else {
+    }
+    else {
       // If player isn't moving, play stance animation.
       plr.anim = "stance";
       // Also reset running frame.
       plr.frame = 0.0
     }
-  } else {
+  }
+  else {
     // If the player is climbing, we may move horizontally, but slower than normal
     
-    if (37 in keysDown) {
-      // -- Left arrow --
+    if (37 in keysDown) { // -- Left arrow --
       plr.x -= plr.speed * modifier / 2;
       plr.frame += plr.speed * modifier / 12;
       // We move horizontally
       plr.climbing = 2;
-    } else if (39 in keysDown) {
-      // -- Right arrow --
+    }
+    else if (39 in keysDown) { // -- Right arrow --
       plr.x += plr.speed * modifier / 2;
       plr.frame += plr.speed * modifier / 12;
       // We move horizontally
       plr.climbing = 2;
-    } else {
+    }
+    else {
       // We're not moving horizontally
       plr.climbing = 1;
     }
   }
   
   // Controlling climbing ladders
-	if (38 in keysDown) {
-    // -- Up arrow --
+	if (38 in keysDown) { // -- Up arrow --
     // Climb down the ladders
 		plr.y -= plr.speed/2 * modifier;
     // If we weren't climbing before, reset framecounter
@@ -276,8 +307,8 @@ var update = function( modifier ) {
     if ( plr.climbing == 1 ) {
       plr.frame += plr.speed * modifier / 12;
     }
-	} else if (40 in keysDown) {
-    // -- Down arrow --
+	} 
+  else if (40 in keysDown) { // -- Down arrow --
 		plr.y += plr.speed/2 * modifier;
     if( plr.climbing == 0 ) {
       plr.climbing = 1;
@@ -288,7 +319,8 @@ var update = function( modifier ) {
       // If we move horizontally, we need to double the animation speed,
       // because player is already running an animation in different direction.
       plr.frame -= plr.speed * modifier / 6;
-    } else {
+    }
+    else {
       plr.frame -= plr.speed * modifier / 12;
     }
 	}
@@ -296,24 +328,132 @@ var update = function( modifier ) {
   // Check frame limits
   if( plr.anim == "runleft" || plr.anim == "runright" ) {
     if( plr.frame > 15 ) { plr.frame = 0.0; }
-  } else if ( plr.anim == "climb" ) {
+  }
+  else if ( plr.anim == "climb" ) {
     if( plr.frame < 0 ) { plr.frame = 5; }
     else if ( plr.frame > 5.0 ) { plr.frame = 0.0; }
   }
   
   // Move the "camera" with WASD
-  camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed;
-  camera.y += ( ( 83 in keysDown ) - ( 87 in keysDown ) ) * modifier * camera.speed;
+  camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed; // [D] - [A]
+  camera.y += ( ( 83 in keysDown ) - ( 87 in keysDown ) ) * modifier * camera.speed; // [S] - [W]
+  
+  
+  // Don't let the player escape outside the screen!
+  if ( plr.x + plr.w + camera.x > scr.w - camera.border ) {
+    camera.x = scr.w - camera.border - plr.x - plr.w;
+  }
+  else if ( plr.x + camera.x < camera.border ) {
+    camera.x = camera.border - plr.x;
+  }
+  if ( plr.y + plr.h + camera.y > scr.h - camera.border ) {
+    camera.y = scr.h - camera.border - plr.y - plr.h;
+  }
+  else if ( plr.y + camera.y < camera.border ) {
+    camera.y = camera.border - plr.y;
+  }
   
   // Ugly hack to release climbing animation
   if ( 13 in keysDown ) {
     plr.climbing = false;
   }
   
+  // If we want to change the canvas width or height, modify these variables below.
+  var newWidth = scr.w;
+  var newHeight = scr.h;
+  
+  /*  // Modify canvas width and height with IJKL
+  newWidth  += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
+  newHeight += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
+  */
+  
+  // Also check whether we pressed F11. If so, toggle fullscreen!
+  if( 122 in keysDown ) {
+    delete keysDown[122];
+    scr.fullscreen = !scr.fullscreen;
+    // Did we just toggle it ON?
+    if ( scr.fullscreen ) {
+      // Save old dimensions
+      scr.normalw = scr.w;
+      scr.normalh = scr.h;
+   
+      newWidth = screen.width;
+      newHeight = screen.height;
+      
+      // Pop the canvas out of the normal flow
+      $("#canvascontainer").css({
+        'border': '0',
+        'margin' : '0',
+        'position' : 'absolute',
+        'left' : '0',
+        'top' : '0',
+        'background-color': 'black'
+      });
+    }
+    else {
+      // Reset old dimensions
+      newWidth = scr.normalw;
+      newHeight = scr.normalh;
+      
+      // Pop the canvas back to its normal position.
+      $("#canvascontainer").css({
+        'border': '1px solid #777',
+        'margin-left': 'auto',
+        'margin-right': 'auto',
+        'margin-top': '20px',
+        'position': 'static',
+        'left' : 'auto',
+        'top' : 'auto',
+        'background-color': 'transparent'
+      });
+    }
+  }
+  // Wait for the browser to be in fullscreen before resizing canvas
+  if( scr.fullscreen ) {
+    var waitStart = Date.now();
+    while( screen.availWidth < 1 || screen.availHeight < 1 ) {
+      // Wait for max. 2,5s and then forget fullscreen
+      if( Date.now() - waitStart > 2500 ) {
+        scr.fullscreen = false;
+        
+        // Reset old dimensions
+        newWidth = scr.normalw;
+        newHeight = scr.normalh;
+      
+        // Pop the canvas back to its normal position.
+        $("canvas").css('position','static');
+        
+        alert("fail");
+        
+        break;
+      }
+    }
+    if ( scr.fullScreen ) {
+      // If the while-loop waited successfully, set new dimensions.
+      newWidth = screen.width;
+      newHeight = screen.height;
+    }
+  }
+  
+  if ( newWidth != scr.w ) {
+    scr.w = newWidth;
+    $("#canvascontainer").width( scr.w );
+    canvas.width = scr.w;
+  }
+  if ( newHeight != scr.h ) {
+    scr.h = newHeight;
+    $("#canvascontainer").height( scr.h );
+    canvas.height = scr.h;
+  }
+
   // Position the canvas according to camera.x and camera.y
   ctx.restore();
   ctx.save();
-  ctx.translate( camera.x, camera.y );
+  ctx.translate( Math.round( camera.x ), Math.round( camera.y ) );
+  
+  // Calcute screen coordinates, so we can glue stuff to it.
+  scr.x = -Math.round( camera.x );
+  scr.y = -Math.round( camera.y );
 }
 
 // Main loop
@@ -322,7 +462,6 @@ var main = function () {
   var delta = now - then;
 
   update( delta / 1000 );
-  runFlashes( delta / 1000 );
   render();
 
   then = now;
@@ -337,6 +476,10 @@ var reset = function() {
     flash.mod = 1;
     flash.running = false;
   }
+  
+  // Put the dude in the middle of the screen
+  plr.x = ( scr.w - plr.w ) / 2 + scr.x;
+  plr.y = ( scr.h - plr.h ) / 2 + scr.y;
 }
 
 // Run it!

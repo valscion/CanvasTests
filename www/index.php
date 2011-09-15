@@ -29,7 +29,7 @@
       </header>
       
       <div id="canvascontainer">
-        <canvas id="maincanvas" width="640" height="480"></canvas>
+        <!-- create canvas here with javascript -->
       </div> <!-- close #canvascontainer -->
     </div> <!-- close #maincontainer -->
   </div> <!-- close #container -->
