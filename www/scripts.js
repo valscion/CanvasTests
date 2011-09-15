@@ -24,16 +24,18 @@ var camera = {
 
 // Store information about player
 var plr = {
-  x : 0,          // -- Player x-coordinate
-  y : 0,          // -- Player y-coordinate
+  x : 0,            // -- Player x-coordinate
+  y : 0,            // -- Player y-coordinate
   speed : 256,      // Movement, pixels per second
   w : 16,           // Player width
   h: 24,            // Player height
   anim : "stance",  // Current player animation
   frame : 0.0,      // What frame are we currently running in the animation (will be rounded)
   jumping : false,  // Is the player currently mid-air
-  climbing : 0      // Is the player currently climbing in ladders. 
+  climbing : 0,     // Is the player currently climbing in ladders. 
                     // 0 = not, 1 = yes, 2 = yes and moves horizontally
+  safex : 0,        // -- Last player x-coordinate where there was no collision
+  safey : 0         // -- Last player y-coordinate where there was no collision
 }
 
 // Object to fit all sprites in
@@ -242,7 +244,7 @@ function createAnimTimer( key, speed, oscillate ) {
   animTimers[key].val = 0.0;             // Current value of the timer (from 0.0 to 1.0)
   animTimers[key].running = false;       // Is the timer running
   animTimers[key].speed = speed;         // How fast does timer go from 0.0 to 1.0 in seconds
-  animTimers[key].oscillate = oscillate  // Will the timer start counting down from 1 or fall back to 0
+  animTimers[key].oscillate = oscillate  // Will the timer start counting down from 1 or jump to 0
   animTimers[key].mod = 1;               // Are we going higher or lower (only used if oscillating)
 }
 var animTimers = {};
@@ -414,6 +416,38 @@ var update = function( modifier ) {
     if( plr.frame < 0 ) { plr.frame = 5; }
     else if ( plr.frame > 5.0 ) { plr.frame = 0.0; }
   }
+  
+  // Check collisions with map
+  if ( allLevelsLoaded ) {
+    var tileMap = levels[levels.current].tileMap;
+    var wallHit = false;
+    if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
+      // We are hitting a wall from top and right
+      wallHit = true
+    }
+    else if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
+      // We are hitting a wall from below and right
+      wallHit = true;
+    }
+    else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
+      // We are hitting a wall from top and left
+      wallHit = true;
+    }
+    else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
+      // We are hitting a wall from below and left
+      wallHit = true;
+    }
+
+    if ( wallHit ) {
+      plr.x = plr.safex;
+      plr.y = plr.safey;
+    }
+    else {
+      plr.safex = plr.x;
+      plr.safey = plr.y;
+    }
+  }
+  
   
   // Move the "camera" with WASD
   camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed; // [D] - [A]
@@ -597,7 +631,7 @@ function drawCurrentLevel( ) {
   if ( levels.current < 1 ) { 
     return false;
   }
-  var tileMap = levels[levels.current.toString()].tileMap;
+  var tileMap = levels[levels.current].tileMap;
   
   
   var coinFrame = Math.round( animTimers["coins"].val * 5 );
