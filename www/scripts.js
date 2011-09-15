@@ -43,10 +43,27 @@ var sprites = {
   runleft : null,
   jumpright : null,
   jumpleft : null,
-  climb : null
+  climb : null,
+  walls : null,
+  ladders : null,
+  coin : null
 }
 var spritesLoaded = 0;        // Amount of sprites already loaded
 var allSpritesLoaded = false; // Are all sprites loaded
+
+// Object to fit all levels in
+var levels = {
+  current : 0,
+  "1" : {
+    dataImg : null,
+    tileMap : null,
+    w : null,
+    h : null
+  }
+}
+var levelsLoaded = 0;
+var allLevelsLoaded = false;
+var levelsAmount = 1;
 
 // Create the canvas
 var canvas = document.createElement("canvas");
@@ -58,6 +75,10 @@ $("#canvascontainer")[0].appendChild(canvas);
 // Set canvas' containers width and height
 $("#canvascontainer").css( 'width', scr.w );
 $("#canvascontainer").css( 'height', scr.h );
+
+// Create temporary canvas for modifying images and such
+var tmpCanvas = document.createElement("canvas");
+var tmpCtx = tmpCanvas.getContext("2d");
 
 // Load the sprites, one part is 16x24
 function loadSprites() {
@@ -114,6 +135,44 @@ function loadSprites() {
       }
     }
   sprites.climb.src = "images/climb.png";
+  
+  // Walls
+  sprites.walls = new Image();
+    sprites.walls.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.walls.src = "images/walls.png";
+  
+  // Ladders
+  sprites.ladders = new Image();
+    sprites.ladders.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.ladders.src = "images/ladders.png";
+  
+  // Coin
+  sprites.coin = new Image();
+    sprites.coin.onload = function() { 
+      if( ++spritesLoaded == Object.keys(sprites).length ) {
+        allSpritesLoaded = true;
+      }
+    }
+  sprites.coin.src = "images/coin.png";
+}
+
+// Load the levels
+function loadLevels() {
+  levels["1"].dataImg = new Image();
+    levels["1"].dataImg.onload = function() { 
+      if( ++levelsLoaded == levelsAmount ) {
+        allLevelsLoaded = true;
+      }
+    }
+  levels["1"].dataImg.src = "images/levels/1/data.png";
 }
 
 // Draw player
@@ -169,17 +228,24 @@ $(document.body).keyup( function (e) {
   }
 });
 
-// Creating a new flash and appending it to the flashes-object
-function createFlash( key, speed ) {
-  this.toggled = false; // Is flash toggled
-  this.val = 0.0;       // Current value of the flash (from 0.0 to 1.0)
-  this.mod = 1;         // Are we going higher or lower
-  this.running = false; // Is the flash running
-  this.speed = speed;   // How fast does flash go from 0.0 to 1.0 in seconds
+// Creating a new animation timer and appending it to the animTimers-object
+function createAnimTimer( key, speed, oscillate ) {
+  if( typeof oscillate != 'undefined' && oscillate != false ) {
+    oscillate = true;
+  } else {
+    oscillate = false;
+  }
+
+  animTimers[key] = {};
   
-  flashes[key] = this;
+  animTimers[key].toggled = false;       // Is timer toggled
+  animTimers[key].val = 0.0;             // Current value of the timer (from 0.0 to 1.0)
+  animTimers[key].running = false;       // Is the timer running
+  animTimers[key].speed = speed;         // How fast does timer go from 0.0 to 1.0 in seconds
+  animTimers[key].oscillate = oscillate  // Will the timer start counting down from 1 or fall back to 0
+  animTimers[key].mod = 1;               // Are we going higher or lower (only used if oscillating)
 }
-var flashes = {};
+var animTimers = {};
 
 // Render all stuff to screen
 var render = function() {
@@ -187,23 +253,30 @@ var render = function() {
   // Clear the screen
   ctx.clearRect(-camera.x,-camera.y,scr.w,scr.h);
   
-  // Draw some text
+  // Draw the level
+  drawCurrentLevel();
+  
+  /* // Draw some text
   // ...add some flash
-  var tmp = Math.round( 64.0 + flashes.maintext.val * 191 );
+  var tmp = Math.round( 64.0 + animTimers.maintext.val * 191 );
   ctx.fillStyle = "rgb("+tmp+","+tmp+","+tmp+")";
   ctx.font = "24px Helvetica";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
+  var tmp = Math.round( 64.0 + animTimers.maintext.val * 191 );
   ctx.fillText("Hei, maailma!", 0, 0);
+  */
   
   // Draw the dude
   drawPlayer();
   
   
   // Draw some debug-info
-  ctx.fillStyle = "rgb(128,128,128)";
+  var tmp = Math.round( 255 - ( animTimers.maintext.val * 128 ) );
+  ctx.fillStyle = "rgb("+tmp+","+tmp+",0)";
   ctx.font = "12px Helvetica";
   ctx.textAlign = "right";
+  ctx.textBaseline = "top";
   ctx.fillText("plr.x:", scr.x + scr.w-40, scr.y );
   ctx.fillText("plr.y:", scr.x + scr.w-40, scr.y + 14 );
   ctx.fillText("camera.x:", scr.x + scr.w-40, scr.y + 28 );
@@ -224,31 +297,39 @@ var update = function( modifier ) {
     clearInterval( mainInterval );
   }
   
-  // Update flashes
-  for( f in flashes ) {
-    var flash = flashes[f];
-    if( flash.toggled ) {
-      flash.running = true;
-      flash.val = flash.val + modifier * flash.mod * flash.speed;
-      if( flash.val > 1.0 ) { flash.val = 1.0; flash.mod = -1; }
-      if( flash.val < 0.0 ) { flash.val = 0.0; flash.mod = 1; }
-    }
-    else if( flash.running ) {
-      flash.mod = 1;
-      flash.val = flash.val - modifier * flash.speed;
-      if( flash.val < 0.0 ) {
-        flash.val = 0.0;
-        flash.running = false;
+  // Update flashes / animTimers
+  for( f in animTimers ) {
+    var flash = animTimers[f];
+    if( flash.oscillate ) {
+      if( flash.toggled ) {
+        flash.running = true;
+        flash.val = flash.val + modifier * flash.mod * flash.speed;
+        if( flash.val > 1.0 ) { flash.val = 1.0; flash.mod = -1; }
+        if( flash.val < 0.0 ) { flash.val = 0.0; flash.mod = 1; }
       }
-    }
-    else {
-      flash.val = 0.0;
+      else if( flash.running ) {
+        flash.mod = 1;
+        flash.val = flash.val - modifier * flash.speed;
+        if( flash.val < 0.0 ) {
+          flash.val = 0.0;
+          flash.running = false;
+        }
+      }
+      else {
+        flash.val = 0.0;
+      }
+    } else {
+      // Much simpler "flash"
+      if( flash.toggled ) {
+        flash.val = flash.val + modifier * flash.speed;
+        if( flash.val > 1.0 ) { flash.val = 0.0; }
+      }
     }
   }
   
-  if( 32 in keysDown) { // -- Return --
+  if( 32 in keysDown) { // -- Spacebar --
     // Toggle maintext flash
-    flashes.maintext.toggled = !flashes.maintext.toggled;
+    animTimers.maintext.toggled = !animTimers.maintext.toggled;
     delete keysDown[32];
   }
   
@@ -456,11 +537,122 @@ var update = function( modifier ) {
   scr.y = -Math.round( camera.y );
 }
 
+function playLevel( level ) {
+  if( allLevelsLoaded == false ) { return false; }
+  var lvl = null;
+  switch( level ) {
+    case 1:
+    case "1":
+      levels.current = 1;
+      lvl = "1";
+      break;
+    default:
+      return false;
+  }
+  
+  if( levels[lvl].tileMap != null ) {
+    return true;
+  }
+  
+  // ------------------------
+  // Parse level img
+  // ------------------------
+  
+  var width = levels[lvl].dataImg.width;
+  var height = levels[lvl].dataImg.height;
+  
+  tmpCanvas.width = width;
+  tmpCanvas.height = height;
+  
+  tmpCtx.drawImage( levels[lvl].dataImg, 0, 0 );
+  
+  var imageData = tmpCtx.getImageData( 0, 0, width, height );
+  var data = imageData.data;
+  
+  var tileMap = new Array( width );
+  for( var i=0; i<width; ++i ) {
+    tileMap[i] = new Array( height );
+  }
+  
+  var x = 0;
+  var y = 0;
+  for (var i = 0, n = data.length; i < n; i += 4) {
+    tileMap[x][y] = tileType( data[i], data[i+1], data[i+2], data[i+3] );
+    
+    ++x;
+    if( x >= width ) {
+      x = 0;
+      ++y;
+    }
+  }
+  
+  levels[lvl].tileMap = tileMap;
+  
+  animTimers["coins"].toggled = true;
+  animTimers["coins"].val = 0.0;
+  return true;
+}
+
+function drawCurrentLevel( ) {
+  if ( levels.current < 1 ) { 
+    return false;
+  }
+  var tileMap = levels[levels.current.toString()].tileMap;
+  
+  
+  var coinFrame = Math.round( animTimers["coins"].val * 5 );
+  for( var i=0, ni = tileMap.length; i < ni; ++i ) {
+    for( var j=0, nj = tileMap[i].length; j < nj; j++ ) {
+      if( tileMap[i][j] == "wall" ) {
+        ctx.drawImage( sprites.walls, 0, 0, 16, 24, i*16, j*24, 16, 24 );
+      }
+      else if( tileMap[i][j] == "ladders" ) {
+        ctx.drawImage( sprites.ladders, 0, 0, 16, 24, i*16, j*24, 16, 24 );
+      }
+      else if( tileMap[i][j] == "coin" ) {
+        ctx.drawImage( sprites.coin, coinFrame*16, 0, 16, 24, i*16, j*24, 16, 24 );
+      }
+    }
+  }
+}
+
+function tileType( r, g, b, a ) {
+  if( a == 0 ) { // Nothing
+    return "";
+  }
+  
+  if( r == 0 && g == 0 && b == 0 ) { // Wall
+    return "wall";
+  }
+  
+  if( r == 0 && g == 255 && b == 0 ) { // Ladders
+    return "ladders";
+  }
+  
+  if( r == 0 && g == 0 && b == 255 ) { // Coin
+    return "coin";
+  }
+  
+  if( r == 255 && g == 0 && b == 0 ) { // Start point
+    return "start";
+  }
+  
+  if( r == 128 && g == 128 && b == 128 ) { // Crumbling wall
+    // return "crumblingwall";
+    return "wall";
+  }
+  
+  return "";
+}
+
 // Main loop
 var main = function () {
   var now = Date.now();
   var delta = now - then;
 
+  if( levels.current != 1 ) {
+    playLevel( 1 ) == true;
+  }
   update( delta / 1000 );
   render();
 
@@ -469,8 +661,8 @@ var main = function () {
 
 // Reset
 var reset = function() {
-  for( f in flashes ) {
-    var flash = flashes[f];
+  for( f in animTimers ) {
+    var flash = animTimers[f];
     flash.toggled = false;
     flash.val = 0.0;
     flash.mod = 1;
@@ -484,7 +676,9 @@ var reset = function() {
 
 // Run it!
 loadSprites();
+loadLevels();
 reset();
-createFlash( "maintext", 1.0 );
+createAnimTimer( "maintext", 1.0, true );
+createAnimTimer( "coins", 1.0 );
 var then = Date.now();
 var mainInterval = setInterval(main, 10); // Run (almost) as fast as possible
