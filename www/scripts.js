@@ -646,8 +646,8 @@ function playLevel( level ) {
   }
   
   levels[lvl].tileMap = tileMap;
-  levels[lvl].w = x;
-  levels[lvl].h = y;
+  levels[lvl].w = width;
+  levels[lvl].h = height;
   
   animTimers["coins"].toggled = true;
   animTimers["coins"].val = 0.0;
