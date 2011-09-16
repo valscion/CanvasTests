@@ -26,7 +26,7 @@ var camera = {
 var plr = {
   x : 0,            // -- Player x-coordinate
   y : 0,            // -- Player y-coordinate
-  speed : 256,      // Movement, pixels per second
+  speed : 196,      // Movement, pixels per second
   w : 16,           // Player width
   h: 24,            // Player height
   anim : "stance",  // Current player animation
@@ -36,6 +36,15 @@ var plr = {
                     // 0 = not, 1 = yes, 2 = yes and moves horizontally
   safex : 0,        // -- Last player x-coordinate where there was no collision
   safey : 0         // -- Last player y-coordinate where there was no collision
+}
+
+// Store information about tiles on sides and under the player
+var tiles = {
+  left : [],
+  right : [],
+  above : [],
+  below : [],
+  under : []
 }
 
 // Object to fit all sprites in
@@ -66,6 +75,10 @@ var levels = {
 var levelsLoaded = 0;
 var allLevelsLoaded = false;
 var levelsAmount = 1;
+
+// Object for drawing stuff as debug info
+var debugObj = {}
+var showDebug = true;
 
 // Create the canvas
 var canvas = document.createElement("canvas");
@@ -192,8 +205,11 @@ function drawPlayer() {
     case "runleft":
       ctx.drawImage( sprites.runleft, frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
-    case "jump":
-      ctx.drawImage( sprites.jump, frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
+    case "jumpright":
+      ctx.drawImage( sprites.runright, 0, 0, 16, 24, plr.x, plr.y, 16, 24 );
+      break;
+    case "jumpleft":
+      ctx.drawImage( sprites.runleft, 0, 0, 16, 24, plr.x, plr.y, 16, 24 );
       break;
     case "climb":
       ctx.drawImage( sprites.climb, frame*16, 0, 16, 24, plr.x, plr.y, 16, 24 );
@@ -272,48 +288,45 @@ var render = function() {
   ctx.fillText("Hei, maailma!", 0, 0);
   */
   
+  // Draw some debug-info
+  debugObj["plr.x:"] = plr.x;
+  debugObj["plr.y:"] = plr.y;
+  debugObj["camera.x:"] = camera.x;
+  debugObj["camera.y:"] = camera.y;
+  debugObj["Under tile:"] = getTilesAsString("under");
+  debugObj["Left tile:"] = getTilesAsString("left");
+  debugObj["Right tile:"] = getTilesAsString("right");
+  debugObj["Above tile:"] = getTilesAsString("above");
+  debugObj["Below tile:"] = getTilesAsString("below");
+  
+  drawDebug( scr.x + scr.w-120, scr.y );
   // Draw the dude
   drawPlayer();
-  
-  
-  // Draw some debug-info
+}
+
+// Draw debug info
+function drawDebug( x, startY ) {
   var tmp = Math.round( 255 - ( animTimers.maintext.val * 128 ) );
   ctx.fillStyle = "rgb("+tmp+","+tmp+",0)";
   ctx.font = "12px Helvetica";
-  ctx.textAlign = "right";
   ctx.textBaseline = "top";
-  ctx.fillText("plr.x:", scr.x + scr.w-40, scr.y );
-  ctx.fillText("plr.y:", scr.x + scr.w-40, scr.y + 14 );
-  ctx.fillText("camera.x:", scr.x + scr.w-40, scr.y + 28 );
-  ctx.fillText("camera.y:", scr.x + scr.w-40, scr.y + 42 );
-  ctx.fillText("Under tile:", scr.x + scr.w-40, scr.y + 56 );
-  ctx.fillText("Left tile:", scr.x + scr.w-40, scr.y + 70 );
-  ctx.fillText("Right tile:", scr.x + scr.w-40, scr.y + 84 );
-  ctx.fillText("Above tile:", scr.x + scr.w-40, scr.y + 98 );
-  ctx.fillText("Below tile:", scr.x + scr.w-40, scr.y + 112 );
+  var i = 0;
+  for( o in debugObj ) {
+    ctx.textAlign = "right";
+    ctx.fillText( o, x, startY + i );
+    ctx.textAlign = "left";
+    ctx.fillText( debugObj[o], x+10, startY + i );
+    i += 14;
+  }
   
-  ctx.textAlign = "left";
-  ctx.fillText(plr.x, scr.x + scr.w-30, scr.y );
-  ctx.fillText(plr.y, scr.x + scr.w-30, scr.y + 14 );
-  ctx.fillText(camera.x, scr.x + scr.w-30, scr.y + 28 );
-  ctx.fillText(camera.y, scr.x + scr.w-30, scr.y + 42 );
-  ctx.fillText(getTile("under"), scr.x + scr.w-30, scr.y + 56 );
-  ctx.fillText(getTile("left"), scr.x + scr.w-30, scr.y + 70 );
-  ctx.fillText(getTile("right"), scr.x + scr.w-30, scr.y + 84 );
-  ctx.fillText(getTile("above"), scr.x + scr.w-30, scr.y + 98 );
-  ctx.fillText(getTile("below"), scr.x + scr.w-30, scr.y + 112 );
-  
+  // Clear the debug object after drawing
+  for( o in debugObj ) {
+    delete debugObj[o];
+  }
 }
 
 // Main update function for doing stuff according to delta-time
-var update = function( modifier ) {
-  if( 19 in keysDown ) { // -- Pause/break --
-    // Emergency stop. Need to refresh page to start the script again.
-    // Disable key-prevention, too.
-    preventKeyDefaults = false;
-    clearInterval( mainInterval );
-  }
-  
+function update( modifier ) {
   // Update flashes / animTimers
   for( f in animTimers ) {
     var flash = animTimers[f];
@@ -355,16 +368,27 @@ var update = function( modifier ) {
     // Controlling left/right movement
     if (37 in keysDown) { // -- Left arrow --
       plr.x -= plr.speed * modifier;
-      plr.anim = "runleft";
-      plr.frame += plr.speed * modifier / 8;
+      // Only play animation if we are on floor
+      if( plr.onfloor ) {
+        plr.anim = "runleft";
+        plr.frame += plr.speed * modifier / 8;
+      }
+      else {
+        plr.anim = "jumpleft"
+      }
     }
     else if (39 in keysDown) { // -- Right arrow --
       plr.x += plr.speed * modifier;
-      plr.anim = "runright";
-      plr.frame += plr.speed * modifier / 8;
+      if( plr.onfloor ) {
+        plr.anim = "runright";
+        plr.frame += plr.speed * modifier / 8;
+      }
+      else {
+        plr.anim = "jumpright"
+      }
     }
-    else {
-      // If player isn't moving, play stance animation.
+    else if ( plr.onfloor == true ) {
+      // If player isn't moving nor mid-air, play stance animation.
       plr.anim = "stance";
       // Also reset running frame.
       plr.frame = 0.0
@@ -372,18 +396,37 @@ var update = function( modifier ) {
   }
   else {
     // If the player is climbing, we may move horizontally, but slower than normal
+    // If we move horizontally to a place where there's no ladders, unclimb.
     
     if (37 in keysDown) { // -- Left arrow --
       plr.x -= plr.speed * modifier / 2;
       plr.frame += plr.speed * modifier / 12;
-      // We move horizontally
-      plr.climbing = 2;
+      if( !inTile("left", "ladders") && !inTile("left", "wall") ) {
+        // We release our grip from the ladders
+        plr.climbing = 0;
+        plr.onfloor = false;
+        plr.anim = "jumpleft"
+        plr.frame = 0.0;
+      }
+      else {
+        // We move horizontally on the ladders
+        plr.climbing = 2;
+      }
     }
     else if (39 in keysDown) { // -- Right arrow --
       plr.x += plr.speed * modifier / 2;
       plr.frame += plr.speed * modifier / 12;
-      // We move horizontally
-      plr.climbing = 2;
+      if( !inTile("right", "ladders") && !inTile("right", "wall") ) {
+        // We release our grip from the ladders
+        plr.climbing = 0;
+        plr.onfloor = false;
+        plr.anim = "jumpright"
+        plr.frame = 0.0;
+      }
+      else {
+        // We move horizontally on the ladders
+        plr.climbing = 2;
+      }
     }
     else {
       // We're not moving horizontally
@@ -398,7 +441,9 @@ var update = function( modifier ) {
     // If we weren't climbing before, check are we under ladders
     // and if so, reset framecounter and set player climbing.
     if ( plr.climbing == 0 ) {
-      if ( getTile("under") == "ladders" ) {
+      if ( inTile("under", "ladders") ) {
+        // Center the player to the ladders horizontally
+        plr.x = Math.round( plr.x / 16 ) * 16;
         plr.climbing = 1;
         plr.frame = 0;
         plr.anim = "climb";
@@ -414,7 +459,9 @@ var update = function( modifier ) {
   } 
   else if (40 in keysDown) { // -- Down arrow --
     if( plr.climbing == 0 ) {
-      if ( getTile("under") == "ladders" || getTile("below") == "ladders" ) {
+      if ( inTile("under", "ladders") || inTile("below", "ladders") ) {
+        // Center the player to the ladders horizontally
+        plr.x = Math.round( plr.x / 16 ) * 16;
         plr.climbing = 1;
         plr.frame = 0;
         plr.anim = "climb";
@@ -425,7 +472,7 @@ var update = function( modifier ) {
       // because player is already running an animation in different direction.
       plr.frame -= plr.speed * modifier / 6;
     }
-    else {
+    else if ( plr.climbing == 1 ) {
       plr.frame -= plr.speed * modifier / 12;
     }
     if ( plr.climbing > 0 ) {
@@ -437,44 +484,34 @@ var update = function( modifier ) {
   if( plr.anim == "runleft" || plr.anim == "runright" ) {
     if( plr.frame > 15 ) { plr.frame = 0.0; }
   }
+  else if ( plr.anim == "jumpleft" || plr.anim == "jumpright" ) {
+    // Jumping animation is done using animTimers
+    animTimers.jump.toggled = true;
+    plr.frame = animTimers.jump.val * 9;
+  }
   else if ( plr.anim == "climb" ) {
     if( plr.frame < 0 ) { plr.frame = 5; }
     else if ( plr.frame > 5.0 ) { plr.frame = 0.0; }
   }
   
   // Check collisions with map
-  if ( allLevelsLoaded ) {
-    var tileMap = levels[levels.current].tileMap;
-    var wallHit = false;
-    if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
-      // We are hitting a wall from top and right
-      wallHit = true
-    }
-    else if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
-      // We are hitting a wall from below and right
-      wallHit = true;
-    }
-    else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
-      // We are hitting a wall from top and left
-      wallHit = true;
-    }
-    else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
-      // We are hitting a wall from below and left
-      wallHit = true;
-    }
-
-    if ( wallHit ) {
-      plr.x = plr.safex;
-      plr.y = plr.safey;
-    }
-    else {
-      plr.safex = plr.x;
-      plr.safey = plr.y;
-    }
+  var wallHit = false;
+  if( inTile("under", "wall") ) {
+    wallHit = true;
+  }
+  if ( wallHit ) {
+    plr.x = Math.round( plr.safex );
+    plr.y = Math.round( plr.safey ) - 1;
+  }
+  else {
+    plr.safex = plr.x;
+    plr.safey = plr.y;
   }
   
+  debugObj["wallHit"] = wallHit;
+  
   // Release climbing-status if the player is not on ladders
-  if( getTile("under") != "ladders" ) {
+  if( !inTile("under", "ladders") ) {
     plr.climbing = 0;
   }
   
@@ -483,6 +520,11 @@ var update = function( modifier ) {
   camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed; // [D] - [A]
   camera.y += ( ( 83 in keysDown ) - ( 87 in keysDown ) ) * modifier * camera.speed; // [S] - [W]
   
+  // Move the player arbitrary with IJKL
+  if( (73 in keysDown)||(74 in keysDown)||(75 in keysDown)||(76 in keysDown) ) {
+    plr.x = plr.safex += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
+    plr.y = plr.safey += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
+  }
   
   // Don't let the player escape outside the screen!
   if ( plr.x + plr.w + camera.x > scr.w - camera.border ) {
@@ -711,56 +753,110 @@ function tileType( r, g, b, a ) {
   return "";
 }
 
-function getTile( direction ) {
+function updateNearbyTiles() {
   if ( !allLevelsLoaded ) {
     return "";
   }
   var tileMap = levels[levels.current].tileMap;
-  var tileUnderX = Math.round( ( plr.x ) / 16 );
-  var tileUnderY = Math.ceil( ( plr.y ) / 24 );
-  switch( direction ) {
-    case "under":
-      return tileMap[ tileUnderX ][ tileUnderY ];
-      break;
-    case "left":
-      if( tileUnderX <= 0 ) return "wall";
-      return tileMap[ tileUnderX - 1 ][ tileUnderY ];
-      break;
-    case "right":
-      if( tileUnderX >= levels[levels.current].w ) return "wall";
-      return tileMap[ tileUnderX + 1 ][ tileUnderY ];
-      break;
-    case "above":
-    case "up":
-      if( tileUnderY <= 0 ) return "wall";
-      return tileMap[ tileUnderX ][ tileUnderY - 1 ];
-      break;
-    case "below":
-    case "down":
-      if( tileUnderY >= levels[levels.current].h ) return "wall";
-      return tileMap[ tileUnderX ][ tileUnderY + 1 ];
-      break;
-    default:
-      return "";
+  var tileX = Math.round( ( plr.x ) / 16 );
+  var tileCeilX = Math.ceil( Math.round( plr.x ) / 16 );
+  var tileFloorX = Math.floor( Math.round( plr.x ) / 16 );
+  var tileY = Math.round( ( plr.y ) / 24 );
+  var tileCeilY = Math.ceil( Math.round( plr.y ) / 24 );
+  var tileFloorY = Math.floor( Math.round( plr.y ) / 24 );
+  
+  debugObj["tileX"] = tileX;
+  debugObj["tileCeilX"] = tileCeilX;
+  debugObj["tileFloorX"] = tileFloorX;
+  debugObj["tileY"] = tileY;
+  debugObj["tileCeilY"] = tileCeilY;
+  debugObj["tileFloorY"] = tileFloorY;
+  
+  // Reset tiles
+  tiles.under = [];
+  tiles.left = [];
+  tiles.right = [];
+  tiles.above = [];
+  tiles.below = [];
+  
+  tiles.under.push( tileMap[tileX][tileCeilY] );
+  tiles.under.push( tileMap[tileX][tileFloorY] );
+  tiles.under.push( tileMap[tileCeilX][tileY] );
+  tiles.under.push( tileMap[tileFloorX][tileY] );
+  
+  if( tileX > 0 ) {
+    tiles.left.push( tileMap[tileX-1][tileCeilY] );
+    tiles.left.push( tileMap[tileX-1][tileFloorY] );
+  } else {
+    tiles.left.push( "wall" );
+    tiles.left.push( "wall" );
+  }
+  
+  if( tileX < levels[levels.current].w ) {
+    tiles.right.push( tileMap[tileX+1][tileCeilY] );
+    tiles.right.push( tileMap[tileX+1][tileFloorY] );
+  } else {
+    tiles.right.push( "wall" );
+    tiles.right.push( "wall" );
+  }
+  
+  if( tileY > 0 ) {
+    tiles.above.push( tileMap[tileCeilX][tileY-1] );
+    tiles.above.push( tileMap[tileFloorX][tileY-1] );
+  } else {
+    tiles.above.push( "wall" );
+    tiles.above.push( "wall" );
+  }
+  
+  if( tileCeilY < levels[levels.current].h ) {
+    tiles.below.push( tileMap[tileCeilX][tileY+1] );
+    tiles.below.push( tileMap[tileFloorX][tileY+1] );
+  } else {
+    tiles.below.push( "wall" );
+    tiles.below.push( "wall" );
   }
 }
 
-// Main loop
-var main = function () {
-  var now = Date.now();
-  var delta = now - then;
-
-  if( levels.current != 1 ) {
-    playLevel( 1 ) == true;
+function inTile( direction, tileType ) {
+  var arr = null;
+  switch( direction ) {
+    case "under":
+      arr = tiles.under;
+      break;
+    case "left":
+      arr = tiles.left;
+      break;
+    case "right":
+      arr = tiles.right;
+      break;
+    case "above":
+      arr = tiles.above;
+      break;
+    case "below":
+      arr = tiles.below;
+      break;
+    default:
+      return false;
   }
-  update( delta / 1000 );
-  render();
+  
+  for( var i=0, n=arr.length; i<n; ++i ) {
+    if( arr[i] == tileType ) {
+      return true;
+    }
+  }
+  return false;
+}
 
-  then = now;
-};
+function getTilesAsString( direction ) {
+  var ret = "";
+  for( o in tiles[direction] ) {
+    ret += tiles[direction][o] + " ";
+  }
+  return ret;
+}
 
 // Reset
-var reset = function() {
+function reset() {
   for( f in animTimers ) {
     var flash = animTimers[f];
     flash.toggled = false;
@@ -774,11 +870,35 @@ var reset = function() {
   plr.y = ( scr.h - plr.h ) / 2 + scr.y;
 }
 
+// Main loop
+var main = function () {
+  if( 19 in keysDown ) { // -- Pause/break --
+    // Emergency stop. Need to refresh page to start the script again.
+    // Disable key-prevention, too.
+    preventKeyDefaults = false;
+    clearInterval( mainInterval );
+  }
+
+  var now = Date.now();
+  var delta = now - then;
+
+  if( levels.current != 1 ) {
+    playLevel( 1 );
+  } else {
+    updateNearbyTiles()
+    update( delta / 1000 );
+    render();
+  }
+
+  then = now;
+};
+
 // Run it!
 loadSprites();
 loadLevels();
 reset();
 createAnimTimer( "maintext", 1.0, true );
 createAnimTimer( "coins", 1.0 );
+createAnimTimer( "jump", 1.0 );
 var then = Date.now();
 var mainInterval = setInterval(main, 10); // Run (almost) as fast as possible
