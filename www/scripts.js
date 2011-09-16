@@ -31,7 +31,7 @@ var plr = {
   h: 24,            // Player height
   anim : "stance",  // Current player animation
   frame : 0.0,      // What frame are we currently running in the animation (will be rounded)
-  jumping : false,  // Is the player currently mid-air
+  onfloor : false,  // Is the player currently on floor (so that one can run)
   climbing : 0,     // Is the player currently climbing in ladders. 
                     // 0 = not, 1 = yes, 2 = yes and moves horizontally
   safex : 0,        // -- Last player x-coordinate where there was no collision
@@ -211,23 +211,26 @@ function drawPlayer() {
 
 // Handle keyboard controls
 var keysDown = {};
+var preventKeyDefaults = true;
 
 $("body").keydown( function (e) {
-  if( e.keyCode != 122 ) {
-    // Don't prevent fullscr mode
-    e.preventDefault();
-  }
   keysDown[e.keyCode] = true;
+  if( e.keyCode != 122 && preventKeyDefaults ) {
+    // Don't prevent fullscr mode
+    return false;
+  }
+  return true;
 });
 
 $("body").keyup( function (e) {
-  if( e.keyCode != 122 ) {
-    // Don't prevent fullscr mode
-    e.preventDefault();
-  }
   if( e.keyCode in keysDown ) {
     delete keysDown[e.keyCode];
   }
+  if( e.keyCode != 122 && preventKeyDefaults ) {
+    // Don't prevent fullscr mode
+    return false;
+  }
+  return true;
 });
 
 // Creating a new animation timer and appending it to the animTimers-object
@@ -306,6 +309,8 @@ var render = function() {
 var update = function( modifier ) {
   if( 19 in keysDown ) { // -- Pause/break --
     // Emergency stop. Need to refresh page to start the script again.
+    // Disable key-prevention, too.
+    preventKeyDefaults = false;
     clearInterval( mainInterval );
   }
   
