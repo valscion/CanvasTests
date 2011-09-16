@@ -212,7 +212,7 @@ function drawPlayer() {
 // Handle keyboard controls
 var keysDown = {};
 
-$(document.body).keydown( function (e) {
+$("body").keydown( function (e) {
   if( e.keyCode != 122 ) {
     // Don't prevent fullscr mode
     e.preventDefault();
@@ -220,7 +220,7 @@ $(document.body).keydown( function (e) {
   keysDown[e.keyCode] = true;
 });
 
-$(document.body).keyup( function (e) {
+$("body").keyup( function (e) {
   if( e.keyCode != 122 ) {
     // Don't prevent fullscr mode
     e.preventDefault();
@@ -283,12 +283,22 @@ var render = function() {
   ctx.fillText("plr.y:", scr.x + scr.w-40, scr.y + 14 );
   ctx.fillText("camera.x:", scr.x + scr.w-40, scr.y + 28 );
   ctx.fillText("camera.y:", scr.x + scr.w-40, scr.y + 42 );
+  ctx.fillText("Under tile:", scr.x + scr.w-40, scr.y + 56 );
+  ctx.fillText("Left tile:", scr.x + scr.w-40, scr.y + 70 );
+  ctx.fillText("Right tile:", scr.x + scr.w-40, scr.y + 84 );
+  ctx.fillText("Above tile:", scr.x + scr.w-40, scr.y + 98 );
+  ctx.fillText("Below tile:", scr.x + scr.w-40, scr.y + 112 );
   
   ctx.textAlign = "left";
   ctx.fillText(plr.x, scr.x + scr.w-30, scr.y );
   ctx.fillText(plr.y, scr.x + scr.w-30, scr.y + 14 );
   ctx.fillText(camera.x, scr.x + scr.w-30, scr.y + 28 );
   ctx.fillText(camera.y, scr.x + scr.w-30, scr.y + 42 );
+  ctx.fillText(getTile("under"), scr.x + scr.w-30, scr.y + 56 );
+  ctx.fillText(getTile("left"), scr.x + scr.w-30, scr.y + 70 );
+  ctx.fillText(getTile("right"), scr.x + scr.w-30, scr.y + 84 );
+  ctx.fillText(getTile("above"), scr.x + scr.w-30, scr.y + 98 );
+  ctx.fillText(getTile("below"), scr.x + scr.w-30, scr.y + 112 );
   
 }
 
@@ -377,26 +387,33 @@ var update = function( modifier ) {
   }
   
   // Controlling climbing ladders
-	if (38 in keysDown) { // -- Up arrow --
+  if (38 in keysDown) { // -- Up arrow --
     // Climb down the ladders
-		plr.y -= plr.speed/2 * modifier;
-    // If we weren't climbing before, reset framecounter
+    
+    // If we weren't climbing before, check are we under ladders
+    // and if so, reset framecounter and set player climbing.
     if ( plr.climbing == 0 ) {
-      plr.climbing = 1;
-      plr.frame = 0;
-      plr.anim = "climb";
+      if ( getTile("under") == "ladders" ) {
+        plr.climbing = 1;
+        plr.frame = 0;
+        plr.anim = "climb";
+      }
     }
     // Only if we don't move horizontally, we animate the character here.
     if ( plr.climbing == 1 ) {
       plr.frame += plr.speed * modifier / 12;
     }
-	} 
+    if ( plr.climbing > 0 ) {
+      plr.y -= plr.speed/2 * modifier;
+    }
+  } 
   else if (40 in keysDown) { // -- Down arrow --
-		plr.y += plr.speed/2 * modifier;
     if( plr.climbing == 0 ) {
-      plr.climbing = 1;
-      plr.frame = 0;
-      plr.anim = "climb";
+      if ( getTile("under") == "ladders" || getTile("below") == "ladders" ) {
+        plr.climbing = 1;
+        plr.frame = 0;
+        plr.anim = "climb";
+      }
     }
     if ( plr.climbing == 2 ) {
       // If we move horizontally, we need to double the animation speed,
@@ -406,7 +423,10 @@ var update = function( modifier ) {
     else {
       plr.frame -= plr.speed * modifier / 12;
     }
-	}
+    if ( plr.climbing > 0 ) {
+      plr.y += plr.speed/2 * modifier;
+    }
+  }
   
   // Check frame limits
   if( plr.anim == "runleft" || plr.anim == "runright" ) {
@@ -446,6 +466,11 @@ var update = function( modifier ) {
       plr.safex = plr.x;
       plr.safey = plr.y;
     }
+  }
+  
+  // Release climbing-status if the player is not on ladders
+  if( getTile("under") != "ladders" ) {
+    plr.climbing = 0;
   }
   
   
@@ -621,6 +646,8 @@ function playLevel( level ) {
   }
   
   levels[lvl].tileMap = tileMap;
+  levels[lvl].w = x;
+  levels[lvl].h = y;
   
   animTimers["coins"].toggled = true;
   animTimers["coins"].val = 0.0;
@@ -677,6 +704,40 @@ function tileType( r, g, b, a ) {
   }
   
   return "";
+}
+
+function getTile( direction ) {
+  if ( !allLevelsLoaded ) {
+    return "";
+  }
+  var tileMap = levels[levels.current].tileMap;
+  var tileUnderX = Math.round( ( plr.x ) / 16 );
+  var tileUnderY = Math.ceil( ( plr.y ) / 24 );
+  switch( direction ) {
+    case "under":
+      return tileMap[ tileUnderX ][ tileUnderY ];
+      break;
+    case "left":
+      if( tileUnderX <= 0 ) return "wall";
+      return tileMap[ tileUnderX - 1 ][ tileUnderY ];
+      break;
+    case "right":
+      if( tileUnderX >= levels[levels.current].w ) return "wall";
+      return tileMap[ tileUnderX + 1 ][ tileUnderY ];
+      break;
+    case "above":
+    case "up":
+      if( tileUnderY <= 0 ) return "wall";
+      return tileMap[ tileUnderX ][ tileUnderY - 1 ];
+      break;
+    case "below":
+    case "down":
+      if( tileUnderY >= levels[levels.current].h ) return "wall";
+      return tileMap[ tileUnderX ][ tileUnderY + 1 ];
+      break;
+    default:
+      return "";
+  }
 }
 
 // Main loop
