@@ -102,6 +102,9 @@ canvas.width = scr.w;
 canvas.height = scr.h;
 $("#canvascontainer")[0].appendChild(canvas);
 
+// Set an ID for the main canvas
+$("#canvascontainer canvas").attr("id", "maincanvas");
+
 // Set canvas' containers width and height
 $("#canvascontainer").css( 'width', scr.w );
 $("#canvascontainer").css( 'height', scr.h );
@@ -109,6 +112,10 @@ $("#canvascontainer").css( 'height', scr.h );
 // Create temporary canvas for modifying images and such
 var tmpCanvas = document.createElement("canvas");
 var tmpCtx = tmpCanvas.getContext("2d");
+
+// Setup kinetic 2d
+var kinetic = new Kinetic_2d("maincanvas");
+kinetic.listen();
 
 // Load the sprites, one part is 16x24
 function loadSprites() {
@@ -264,6 +271,13 @@ $("body").keyup( function (e) {
   return true;
 });
 
+// Handle mouse clicking
+var mouseClicked = false;
+$("body").click( function(e) {
+  e.preventDefault();
+  mouseClicked = true;
+});
+
 // Creating a new animation timer and appending it to the animTimers-object
 function createAnimTimer( key, speed, oscillate ) {
   if( typeof oscillate != 'undefined' && oscillate != false ) {
@@ -284,7 +298,7 @@ function createAnimTimer( key, speed, oscillate ) {
 var animTimers = {};
 
 // Render all stuff to screen
-var render = function() {
+function render() {
   
   // Clear the screen
   ctx.clearRect(-camera.x,-camera.y,scr.w,scr.h);
@@ -304,10 +318,20 @@ var render = function() {
   */
   
   // Draw some debug-info
+  debugObj["plr.midair"] = plr.midair;
+  debugObj["plr.climbing"] = plr.climbing;
   debugObj["plr.x:"] = plr.x;
   debugObj["plr.y:"] = plr.y;
   debugObj["camera.x:"] = camera.x;
   debugObj["camera.y:"] = camera.y;
+  var mousePos = kinetic.getMousePos();
+  if( mousePos != null ) {
+    debugObj["Mouse X:"] = mousePos.x;
+    debugObj["Mouse Y:"] = mousePos.y;
+  } else {
+    debugObj["Mouse X:"] = "No mouseover";
+    debugObj["Mouse Y:"] = "No mouseover";
+  }
   debugObj["Under tile:"] = getTilesAsString("under");
   debugObj["Left tile:"] = getTilesAsString("left");
   debugObj["Right tile:"] = getTilesAsString("right");
@@ -378,6 +402,182 @@ function update( modifier ) {
     delete keysDown[32];
   }
   
+  // Clicking on the canvas sets the player coordinates
+  var mousePos = kinetic.getMousePos();
+  if( mouseClicked && mousePos !== null ) {
+    plr.x = scr.x + mousePos.x;
+    plr.y = scr.y + mousePos.y;
+    plr.midair = true;
+  }
+  
+  // Update keys that control player
+  updatePlayerControls( modifier );
+  
+  // Check frame limits
+  if( plr.anim == "runleft" || plr.anim == "runright" ) {
+    if( plr.frame > 15 ) { plr.frame = 0.0; }
+  }
+  else if ( plr.anim == "jumpleft" || plr.anim == "jumpright" ) {
+    // Jumping animation is done using animTimers
+    animTimers.jump.toggled = true;
+    plr.frame = animTimers.jump.val * 9;
+  }
+  else if ( plr.anim == "climb" ) {
+    if( plr.frame < 0 ) { plr.frame = 5; }
+    else if ( plr.frame > 5.0 ) { plr.frame = 0.0; }
+  }
+  
+  // Check collisions with map
+  var hitDirections = checkMapCollisions();
+  debugObj["Hit wall"] = false;
+  if( Object.keys(hitDirections).length > 0 ) {
+    debugObj["Hit wall"] = getObjectAsString( hitDirections );
+    if( "below" in hitDirections && plr.yPlus <= 0 ) {
+      // If we hit something solid from the bottom, position the player
+      // directly above it so that one doesn't just float around.
+      plr.y = Math.ceil( plr.y / 24 ) * 24 - 1;
+      plr.midair = false;
+    }
+    else if ( "above" in hitDirections && plr.yPlus > 0 ) {
+      // We hit the ceiling so stop going up
+      plr.yPlus = 0.0;
+    }
+  }
+  
+  // Release climbing-status if the player is not on ladders
+  if( !inTile("under", "ladders") ) {
+    plr.climbing = 0;
+  }
+  
+  // Move the "camera" with WASD
+  camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed; // [D] - [A]
+  camera.y += ( ( 83 in keysDown ) - ( 87 in keysDown ) ) * modifier * camera.speed; // [S] - [W]
+  
+  // Move the player arbitrary with IJKL
+  if( (73 in keysDown)||(74 in keysDown)||(75 in keysDown)||(76 in keysDown) ) {
+    plr.x = plr.safex += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
+    plr.y = plr.safey += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
+  }
+  
+  // Don't let the player escape outside the screen!
+  if ( plr.x + plr.w + camera.x > scr.w - camera.border ) {
+    camera.x = scr.w - camera.border - plr.x - plr.w;
+  }
+  else if ( plr.x + camera.x < camera.border ) {
+    camera.x = camera.border - plr.x;
+  }
+  if ( plr.y + plr.h + camera.y > scr.h - camera.border ) {
+    camera.y = scr.h - camera.border - plr.y - plr.h;
+  }
+  else if ( plr.y + camera.y < camera.border ) {
+    camera.y = camera.border - plr.y;
+  }
+  
+  // Ugly hack to release climbing animation
+  if ( 13 in keysDown ) {
+    plr.climbing = false;
+  }
+  
+  // If we want to change the canvas width or height, modify these variables below.
+  var newWidth = scr.w;
+  var newHeight = scr.h;
+  
+  /*  // Modify canvas width and height with IJKL
+  newWidth  += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
+  newHeight += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
+  */
+  
+  // Also check whether we pressed F11. If so, toggle fullscreen!
+  if( 122 in keysDown ) {
+    delete keysDown[122];
+    scr.fullscreen = !scr.fullscreen;
+    // Did we just toggle it ON?
+    if ( scr.fullscreen ) {
+      // Save old dimensions
+      scr.normalw = scr.w;
+      scr.normalh = scr.h;
+   
+      newWidth = screen.width;
+      newHeight = screen.height;
+      
+      // Pop the canvas out of the normal flow
+      $("#canvascontainer").css({
+        'border': '0',
+        'margin' : '0',
+        'position' : 'absolute',
+        'left' : '0',
+        'top' : '0',
+        'background-color': 'black'
+      });
+    }
+    else {
+      // Reset old dimensions
+      newWidth = scr.normalw;
+      newHeight = scr.normalh;
+      
+      // Pop the canvas back to its normal position.
+      $("#canvascontainer").css({
+        'border': '1px solid #777',
+        'margin-left': 'auto',
+        'margin-right': 'auto',
+        'margin-top': '20px',
+        'position': 'static',
+        'left' : 'auto',
+        'top' : 'auto',
+        'background-color': 'transparent'
+      });
+    }
+  }
+  // Wait for the browser to be in fullscreen before resizing canvas
+  if( scr.fullscreen ) {
+    var waitStart = Date.now();
+    while( screen.availWidth < 1 || screen.availHeight < 1 ) {
+      // Wait for max. 2,5s and then forget fullscreen
+      if( Date.now() - waitStart > 2500 ) {
+        scr.fullscreen = false;
+        
+        // Reset old dimensions
+        newWidth = scr.normalw;
+        newHeight = scr.normalh;
+      
+        // Pop the canvas back to its normal position.
+        $("canvas").css('position','static');
+        
+        alert("fail");
+        
+        break;
+      }
+    }
+    if ( scr.fullScreen ) {
+      // If the while-loop waited successfully, set new dimensions.
+      newWidth = screen.width;
+      newHeight = screen.height;
+    }
+  }
+  
+  if ( newWidth != scr.w ) {
+    scr.w = newWidth;
+    $("#canvascontainer").width( scr.w );
+    canvas.width = scr.w;
+  }
+  if ( newHeight != scr.h ) {
+    scr.h = newHeight;
+    $("#canvascontainer").height( scr.h );
+    canvas.height = scr.h;
+  }
+
+  // Position the canvas according to camera.x and camera.y
+  ctx.restore();
+  ctx.save();
+  ctx.translate( Math.round( camera.x ), Math.round( camera.y ) );
+  
+  // Calcute screen coordinates, so we can glue stuff to it.
+  scr.x = -Math.round( camera.x );
+  scr.y = -Math.round( camera.y );
+}
+
+// Update keys that control player
+function updatePlayerControls( modifier ) {
   // Running can only happen when player isn't climbing
   if ( plr.climbing == 0 ) {
     // Controlling left/right movement
@@ -529,6 +729,9 @@ function update( modifier ) {
     }
   }
   
+  // If we are climbing, we are not midair.
+  if( plr.climbing > 0 ) plr.midair = false;
+  
   // JUMP
   if( 90 in keysDown ) { // [Z]
     if( !plr.midair && plr.climbing == 0 ) {
@@ -536,161 +739,6 @@ function update( modifier ) {
       plr.midair = true;
     }
   }
-  
-  // Check frame limits
-  if( plr.anim == "runleft" || plr.anim == "runright" ) {
-    if( plr.frame > 15 ) { plr.frame = 0.0; }
-  }
-  else if ( plr.anim == "jumpleft" || plr.anim == "jumpright" ) {
-    // Jumping animation is done using animTimers
-    animTimers.jump.toggled = true;
-    plr.frame = animTimers.jump.val * 9;
-  }
-  else if ( plr.anim == "climb" ) {
-    if( plr.frame < 0 ) { plr.frame = 5; }
-    else if ( plr.frame > 5.0 ) { plr.frame = 0.0; }
-  }
-  
-  // Check collisions with map
-  var hitDirections = checkMapCollisions();
-  if( Object.keys(hitDirections).length > 0 ) debugObj["Hit wall"] = true;
-  else debugObj["Hit wall"] = false;
-  
-  // Release climbing-status if the player is not on ladders
-  if( !inTile("under", "ladders") ) {
-    plr.climbing = 0;
-  }
-  
-  // Check whether we hit the floor
-  if( "below" in hitDirections ) plr.midair = false;
-  
-  debugObj["plr.midair"] = plr.midair;
-  
-  // Move the "camera" with WASD
-  camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed; // [D] - [A]
-  camera.y += ( ( 83 in keysDown ) - ( 87 in keysDown ) ) * modifier * camera.speed; // [S] - [W]
-  
-  // Move the player arbitrary with IJKL
-  if( (73 in keysDown)||(74 in keysDown)||(75 in keysDown)||(76 in keysDown) ) {
-    plr.x = plr.safex += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
-    plr.y = plr.safey += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
-  }
-  
-  // Don't let the player escape outside the screen!
-  if ( plr.x + plr.w + camera.x > scr.w - camera.border ) {
-    camera.x = scr.w - camera.border - plr.x - plr.w;
-  }
-  else if ( plr.x + camera.x < camera.border ) {
-    camera.x = camera.border - plr.x;
-  }
-  if ( plr.y + plr.h + camera.y > scr.h - camera.border ) {
-    camera.y = scr.h - camera.border - plr.y - plr.h;
-  }
-  else if ( plr.y + camera.y < camera.border ) {
-    camera.y = camera.border - plr.y;
-  }
-  
-  // Ugly hack to release climbing animation
-  if ( 13 in keysDown ) {
-    plr.climbing = false;
-  }
-  
-  // If we want to change the canvas width or height, modify these variables below.
-  var newWidth = scr.w;
-  var newHeight = scr.h;
-  
-  /*  // Modify canvas width and height with IJKL
-  newWidth  += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
-  newHeight += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
-  */
-  
-  // Also check whether we pressed F11. If so, toggle fullscreen!
-  if( 122 in keysDown ) {
-    delete keysDown[122];
-    scr.fullscreen = !scr.fullscreen;
-    // Did we just toggle it ON?
-    if ( scr.fullscreen ) {
-      // Save old dimensions
-      scr.normalw = scr.w;
-      scr.normalh = scr.h;
-   
-      newWidth = screen.width;
-      newHeight = screen.height;
-      
-      // Pop the canvas out of the normal flow
-      $("#canvascontainer").css({
-        'border': '0',
-        'margin' : '0',
-        'position' : 'absolute',
-        'left' : '0',
-        'top' : '0',
-        'background-color': 'black'
-      });
-    }
-    else {
-      // Reset old dimensions
-      newWidth = scr.normalw;
-      newHeight = scr.normalh;
-      
-      // Pop the canvas back to its normal position.
-      $("#canvascontainer").css({
-        'border': '1px solid #777',
-        'margin-left': 'auto',
-        'margin-right': 'auto',
-        'margin-top': '20px',
-        'position': 'static',
-        'left' : 'auto',
-        'top' : 'auto',
-        'background-color': 'transparent'
-      });
-    }
-  }
-  // Wait for the browser to be in fullscreen before resizing canvas
-  if( scr.fullscreen ) {
-    var waitStart = Date.now();
-    while( screen.availWidth < 1 || screen.availHeight < 1 ) {
-      // Wait for max. 2,5s and then forget fullscreen
-      if( Date.now() - waitStart > 2500 ) {
-        scr.fullscreen = false;
-        
-        // Reset old dimensions
-        newWidth = scr.normalw;
-        newHeight = scr.normalh;
-      
-        // Pop the canvas back to its normal position.
-        $("canvas").css('position','static');
-        
-        alert("fail");
-        
-        break;
-      }
-    }
-    if ( scr.fullScreen ) {
-      // If the while-loop waited successfully, set new dimensions.
-      newWidth = screen.width;
-      newHeight = screen.height;
-    }
-  }
-  
-  if ( newWidth != scr.w ) {
-    scr.w = newWidth;
-    $("#canvascontainer").width( scr.w );
-    canvas.width = scr.w;
-  }
-  if ( newHeight != scr.h ) {
-    scr.h = newHeight;
-    $("#canvascontainer").height( scr.h );
-    canvas.height = scr.h;
-  }
-
-  // Position the canvas according to camera.x and camera.y
-  ctx.restore();
-  ctx.save();
-  ctx.translate( Math.round( camera.x ), Math.round( camera.y ) );
-  
-  // Calcute screen coordinates, so we can glue stuff to it.
-  scr.x = -Math.round( camera.x );
-  scr.y = -Math.round( camera.y );
 }
 
 // Update collisions with map
@@ -705,23 +753,23 @@ function checkMapCollisions() {
   
   if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
     // We are hitting a wall from below and right
-    if( inTile("below", "wall") ) hitDirections["below"] = true;
-    if( inTile("right", "wall") ) hitDirections["right"] = true;
+    if( "wall" in tiles.below ) hitDirections["below"] = true;
+    if( "wall" in tiles.right ) hitDirections["right"] = true;
   }
   else if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
     // We are hitting a wall from above and right
-    if( inTile("above", "wall") ) hitDirections["above"] = true;
-    if( inTile("right", "wall") ) hitDirections["right"] = true;
+    if( "wall" in tiles.above ) hitDirections["above"] = true;
+    if( "wall" in tiles.right ) hitDirections["right"] = true;
   }
   else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
     // We are hitting a wall from below and left
-    if( inTile("below", "wall") ) hitDirections["below"] = true;
-    if( inTile("left", "wall") ) hitDirections["left"] = true;
+    if( "wall" in tiles.below ) hitDirections["below"] = true;
+    if( "wall" in tiles.left ) hitDirections["left"] = true;
   }
   else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
     // We are hitting a wall from above and left
-    if( inTile("above", "wall") ) hitDirections["above"] = true;
-    if( inTile("left", "wall") ) hitDirections["left"] = true;
+    if( "wall" in tiles.above ) hitDirections["above"] = true;
+    if( "wall" in tiles.left ) hitDirections["left"] = true;
   }
   
   // Only restrict player's horizontal movement if there's collisions on sides
@@ -733,7 +781,10 @@ function checkMapCollisions() {
   }
   
   // Only restrict player's vertical movement if there's collisions on above/below
-  if( "above" in hitDirections || "below" in hitDirections ) {
+  if( "above" in hitDirections && plr.y < plr.safey ) {
+    plr.y = plr.safey;
+  }
+  else if( "below" in hitDirections && plr.y > plr.safey ) {
     plr.y = plr.safey;
   }
   else {
@@ -983,6 +1034,15 @@ function getTilesAsString( direction ) {
   return ret;
 }
 
+// Gets any objects prop+values as a string
+function getObjectAsString( obj ) {
+  var ret = "";
+  for( o in obj ) {
+    ret += o+":" + obj[o] + " ";
+  }
+  return ret;
+}
+
 // Reset
 function reset() {
   for( f in animTimers ) {
@@ -1018,7 +1078,8 @@ var main = function () {
     updateGravity( delta / 1000 );
     render();
   }
-
+  
+  mouseClicked = false;
   then = now;
 };
 
