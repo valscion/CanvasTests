@@ -31,11 +31,23 @@ var plr = {
   h: 24,            // Player height
   anim : "stance",  // Current player animation
   frame : 0.0,      // What frame are we currently running in the animation (will be rounded)
-  onfloor : false,  // Is the player currently on floor (so that one can run)
+  midair : true,    // Is the player currently mid-air (so that gravity affects them)
   climbing : 0,     // Is the player currently climbing in ladders. 
                     // 0 = not, 1 = yes, 2 = yes and moves horizontally
   safex : 0,        // -- Last player x-coordinate where there was no collision
-  safey : 0         // -- Last player y-coordinate where there was no collision
+  safey : 0,        // -- Last player y-coordinate where there was no collision
+  weight : 70,      // Player weight in kg
+  yPlus : 0         // Gravity acceleration
+}
+
+// Store objects that have gravity.
+// Every object that gravity affects must have the following fields:
+//  * y:        (float) y-coordinate
+//  * yPlus:    (float) current acceleration in the vertical axis
+//  * weight:   (float/int) weight in kg
+//  * midair:   (boolean) sets the object to be mid-air and receive gravity updates
+var gravObj = {
+  "player" : plr
 }
 
 // Store information about tiles on sides and under the player
@@ -79,6 +91,9 @@ var levelsAmount = 1;
 // Object for drawing stuff as debug info
 var debugObj = {}
 var showDebug = true;
+
+// Constant for gravity
+const GRAVITY = -0.08;
 
 // Create the canvas
 var canvas = document.createElement("canvas");
@@ -368,8 +383,8 @@ function update( modifier ) {
     // Controlling left/right movement
     if (37 in keysDown) { // -- Left arrow --
       plr.x -= plr.speed * modifier;
-      // Only play animation if we are on floor
-      if( plr.onfloor ) {
+      // Only play animation if we are not mid-air
+      if( !plr.midair ) {
         plr.anim = "runleft";
         plr.frame += plr.speed * modifier / 8;
       }
@@ -379,7 +394,7 @@ function update( modifier ) {
     }
     else if (39 in keysDown) { // -- Right arrow --
       plr.x += plr.speed * modifier;
-      if( plr.onfloor ) {
+      if( !plr.midair ) {
         plr.anim = "runright";
         plr.frame += plr.speed * modifier / 8;
       }
@@ -387,7 +402,7 @@ function update( modifier ) {
         plr.anim = "jumpright"
       }
     }
-    else if ( plr.onfloor == true ) {
+    else if ( !plr.midair ) {
       // If player isn't moving nor mid-air, play stance animation.
       plr.anim = "stance";
       // Also reset running frame.
@@ -405,7 +420,7 @@ function update( modifier ) {
           // We release our grip from the ladders if there's no ladders or wall to the left
           // of the player nor are we pressing up/down arrow keys.
           plr.climbing = 0;
-          plr.onfloor = false;
+          plr.midair = true;
           plr.anim = "jumpleft"
           plr.frame = 0.0;
         }
@@ -423,7 +438,7 @@ function update( modifier ) {
           // We release our grip from the ladders if there's no ladders or wall to the right
           // of the player nor are we pressing up/down arrow keys.
           plr.climbing = 0;
-          plr.onfloor = false;
+          plr.midair = true;
           plr.anim = "jumpright"
           plr.frame = 0.0;
         }
@@ -514,6 +529,14 @@ function update( modifier ) {
     }
   }
   
+  // JUMP
+  if( 90 in keysDown ) { // [Z]
+    if( !plr.midair && plr.climbing == 0 ) {
+      plr.yPlus = 3.5;
+      plr.midair = true;
+    }
+  }
+  
   // Check frame limits
   if( plr.anim == "runleft" || plr.anim == "runright" ) {
     if( plr.frame > 15 ) { plr.frame = 0.0; }
@@ -533,16 +556,15 @@ function update( modifier ) {
   if( Object.keys(hitDirections).length > 0 ) debugObj["Hit wall"] = true;
   else debugObj["Hit wall"] = false;
   
-  /* // Release climbing-status if the player is not on ladders
+  // Release climbing-status if the player is not on ladders
   if( !inTile("under", "ladders") ) {
     plr.climbing = 0;
   }
-  */
   
   // Check whether we hit the floor
-  if( "below" in hitDirections ) plr.onfloor = true;
+  if( "below" in hitDirections ) plr.midair = false;
   
-  debugObj["plr.onfloor"] = plr.onfloor;
+  debugObj["plr.midair"] = plr.midair;
   
   // Move the "camera" with WASD
   camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed; // [D] - [A]
@@ -719,6 +741,20 @@ function checkMapCollisions() {
   }
   
   return hitDirections;
+}
+
+// Update gravity on objects that have gravity
+function updateGravity( modifier ) {
+  for( o in gravObj ) {
+    var obj = gravObj[o];
+    if( obj.midair ) {
+      obj.yPlus += GRAVITY * obj.weight * modifier;
+      obj.y -= obj.yPlus;
+    }
+    else {
+      obj.yPlus = 0;
+    }
+  }
 }
 
 // Load a level and set it as the current one
@@ -977,8 +1013,9 @@ var main = function () {
   if( levels.current != 1 ) {
     playLevel( 1 );
   } else {
-    updateNearbyTiles()
+    updateNearbyTiles();
     update( delta / 1000 );
+    updateGravity( delta / 1000 );
     render();
   }
 
