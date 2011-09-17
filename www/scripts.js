@@ -578,11 +578,15 @@ function update( modifier ) {
 
 // Update keys that control player
 function updatePlayerControls( modifier ) {
+  
+  var xMove = 0;
+  var yMove = 0;
+  
   // Running can only happen when player isn't climbing
   if ( plr.climbing == 0 ) {
     // Controlling left/right movement
     if (37 in keysDown) { // -- Left arrow --
-      plr.x -= plr.speed * modifier;
+      xMove -= plr.speed * modifier;
       // Only play animation if we are not mid-air
       if( !plr.midair ) {
         plr.anim = "runleft";
@@ -593,7 +597,7 @@ function updatePlayerControls( modifier ) {
       }
     }
     else if (39 in keysDown) { // -- Right arrow --
-      plr.x += plr.speed * modifier;
+      xMove += plr.speed * modifier;
       if( !plr.midair ) {
         plr.anim = "runright";
         plr.frame += plr.speed * modifier / 8;
@@ -614,7 +618,6 @@ function updatePlayerControls( modifier ) {
     // If we move horizontally to a place where there's no ladders, unclimb.
     
     if (37 in keysDown) { // -- Left arrow --
-      plr.frame += plr.speed * modifier / 12;
       if( !(("ladders" in tiles.left) || ("wall" in tiles.left)) ) {
         if( !((38 in keysDown) || (40 in keysDown)) ) {
           // We release our grip from the ladders if there's no ladders or wall to the left
@@ -627,17 +630,16 @@ function updatePlayerControls( modifier ) {
       }
       else {
         // We move horizontally on the ladders
-        plr.x -= plr.speed * modifier / 2;
-        plr.climbing = 2;
+        xMove -= plr.speed * modifier / 2;
+        plr.climbing = true;
       }
     }
     else if (39 in keysDown) { // -- Right arrow --
-      plr.frame += plr.speed * modifier / 12;
       if( !(("ladders" in tiles.right) || ("wall" in tiles.right)) ) {
         if( !((38 in keysDown) || (40 in keysDown)) ) {
           // We release our grip from the ladders if there's no ladders or wall to the right
           // of the player nor are we pressing up/down arrow keys.
-          plr.climbing = 0;
+          plr.climbing = false;
           plr.midair = true;
           plr.anim = "jumpright"
           plr.frame = 0.0;
@@ -645,13 +647,9 @@ function updatePlayerControls( modifier ) {
       }
       else {
         // We move horizontally on the ladders
-        plr.x += plr.speed * modifier / 2;
-        plr.climbing = 2;
+        xMove += plr.speed * modifier / 2;
+        plr.climbing = true;
       }
-    }
-    else {
-      // We're not moving horizontally
-      plr.climbing = 1;
     }
   }
   
@@ -661,76 +659,64 @@ function updatePlayerControls( modifier ) {
     
     // If we weren't climbing before, check are we under ladders
     // and if so, reset framecounter and set player climbing.
-    if ( plr.climbing == 0 ) {
+    if ( !plr.climbing ) {
       if ( "ladders" in tiles.under ) {
         // Center the player to the ladders horizontally
         if ( tiles.under.ladders & 1 ) {
           // Ceil X, CX
           plr.x = Math.ceil( plr.x / 16 ) * 16;
+          xMove = 0;
         }
         else if ( tiles.under.ladders & 2 ) {
           // Floor X, FX
           plr.x = Math.floor( plr.x / 16 ) * 16;
+          xMove = 0;
         }
-        plr.climbing = 1;
+        plr.climbing = true;
         plr.frame = 0;
         plr.anim = "climb";
       }
     }
-    // Only if we don't move horizontally, we animate the character here.
-    if ( plr.climbing == 1 ) {
+    
+    if ( plr.climbing ) {
+      // Animate the player
       plr.frame += plr.speed * modifier / 12;
-    }
-    if ( plr.climbing > 0 ) {
-      plr.y -= plr.speed/2 * modifier;
+      yMove -= plr.speed/2 * modifier;
     }
   } 
   else if (40 in keysDown) { // -- Down arrow --
-    if( plr.climbing == 0 ) {
-      if ( "ladders" in tiles.under ) {
+    if( !plr.climbing ) {
+      if ( "ladders" in tiles.under || "ladders" in tiles.below ) {
         // Center the player to the ladders horizontally
-        if ( tiles.under.ladders & 1 ) {
+        var tileObj = null;
+        if( "ladders" in tiles.below ) tileObj = tiles.below;
+        else tileObj = tiles.under;
+        if ( tileObj.ladders & 1 ) {
           // Ceil X, CX
           plr.x = Math.ceil( plr.x / 16 ) * 16;
+          xMove = 0;
         }
-        else if ( tiles.under.ladders & 2 ) {
+        else if ( tileObj.ladders & 2 ) {
           // Floor X, FX
           plr.x = Math.floor( plr.x / 16 ) * 16;
+          xMove = 0;
         }
-        plr.climbing = 1;
-        plr.frame = 0;
-        plr.anim = "climb";
-      }
-      else if ( "ladders" in tiles.below ) {
-        // We can also start climbing down if there's ladders below the player
-        if ( tiles.below.ladders & 1 ) {
-          // Ceil X, CX
-          plr.x = Math.ceil( plr.x / 16 ) * 16;
-        }
-        else if ( tiles.below.ladders & 2 ) {
-          // Floor X, FX
-          plr.x = Math.floor( plr.x / 16 ) * 16;
-        }
-        plr.climbing = 1;
+        plr.climbing = true;
         plr.frame = 0;
         plr.anim = "climb";
       }
     }
-    if ( plr.climbing == 2 ) {
-      // If we move horizontally, we need to double the animation speed,
-      // because player is already running an animation in different direction.
-      plr.frame -= plr.speed * modifier / 6;
-    }
-    else if ( plr.climbing == 1 ) {
+    if ( plr.climbing ) {
       plr.frame -= plr.speed * modifier / 12;
-    }
-    if ( plr.climbing > 0 ) {
-      plr.y += plr.speed/2 * modifier;
+      yMove += plr.speed/2 * modifier;
     }
   }
   
+  plr.x += xMove;
+  plr.y += yMove;
+  
   // If we are climbing, we are not midair.
-  if( plr.climbing > 0 ) plr.midair = false;
+  if( plr.climbing ) plr.midair = false;
   
   // JUMP
   if( 90 in keysDown ) { // [Z]
