@@ -410,6 +410,11 @@ function update( modifier ) {
     plr.midair = true;
   }
   
+  // Check whether we are on anything solid or climbing and if not, we're mid-air.
+  if( !( ("wall" in tiles.below) || ("ladders" in tiles.below) || plr.climbing ) ) {
+    plr.midair = true;
+  }
+  
   // Update keys that control player
   updatePlayerControls( modifier );
   
