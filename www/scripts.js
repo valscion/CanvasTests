@@ -299,7 +299,7 @@ var render = function() {
   debugObj["Above tile:"] = getTilesAsString("above");
   debugObj["Below tile:"] = getTilesAsString("below");
   
-  drawDebug( scr.x + scr.w-120, scr.y );
+  drawDebug( scr.x + scr.w-150, scr.y+24 );
   // Draw the dude
   drawPlayer();
 }
@@ -399,32 +399,38 @@ function update( modifier ) {
     // If we move horizontally to a place where there's no ladders, unclimb.
     
     if (37 in keysDown) { // -- Left arrow --
-      plr.x -= plr.speed * modifier / 2;
       plr.frame += plr.speed * modifier / 12;
-      if( !inTile("left", "ladders") && !inTile("left", "wall") ) {
-        // We release our grip from the ladders
-        plr.climbing = 0;
-        plr.onfloor = false;
-        plr.anim = "jumpleft"
-        plr.frame = 0.0;
+      if( !(("ladders" in tiles.left) || ("wall" in tiles.left)) ) {
+        if( !((38 in keysDown) || (40 in keysDown)) ) {
+          // We release our grip from the ladders if there's no ladders or wall to the left
+          // of the player nor are we pressing up/down arrow keys.
+          plr.climbing = 0;
+          plr.onfloor = false;
+          plr.anim = "jumpleft"
+          plr.frame = 0.0;
+        }
       }
       else {
         // We move horizontally on the ladders
+        plr.x -= plr.speed * modifier / 2;
         plr.climbing = 2;
       }
     }
     else if (39 in keysDown) { // -- Right arrow --
-      plr.x += plr.speed * modifier / 2;
       plr.frame += plr.speed * modifier / 12;
-      if( !inTile("right", "ladders") && !inTile("right", "wall") ) {
-        // We release our grip from the ladders
-        plr.climbing = 0;
-        plr.onfloor = false;
-        plr.anim = "jumpright"
-        plr.frame = 0.0;
+      if( !(("ladders" in tiles.right) || ("wall" in tiles.right)) ) {
+        if( !((38 in keysDown) || (40 in keysDown)) ) {
+          // We release our grip from the ladders if there's no ladders or wall to the right
+          // of the player nor are we pressing up/down arrow keys.
+          plr.climbing = 0;
+          plr.onfloor = false;
+          plr.anim = "jumpright"
+          plr.frame = 0.0;
+        }
       }
       else {
         // We move horizontally on the ladders
+        plr.x += plr.speed * modifier / 2;
         plr.climbing = 2;
       }
     }
@@ -441,9 +447,16 @@ function update( modifier ) {
     // If we weren't climbing before, check are we under ladders
     // and if so, reset framecounter and set player climbing.
     if ( plr.climbing == 0 ) {
-      if ( inTile("under", "ladders") ) {
+      if ( "ladders" in tiles.under ) {
         // Center the player to the ladders horizontally
-        plr.x = Math.round( plr.x / 16 ) * 16;
+        if ( tiles.under.ladders & 1 ) {
+          // Ceil X, CX
+          plr.x = Math.ceil( plr.x / 16 ) * 16;
+        }
+        else if ( tiles.under.ladders & 2 ) {
+          // Floor X, FX
+          plr.x = Math.floor( plr.x / 16 ) * 16;
+        }
         plr.climbing = 1;
         plr.frame = 0;
         plr.anim = "climb";
@@ -459,9 +472,30 @@ function update( modifier ) {
   } 
   else if (40 in keysDown) { // -- Down arrow --
     if( plr.climbing == 0 ) {
-      if ( inTile("under", "ladders") || inTile("below", "ladders") ) {
+      if ( "ladders" in tiles.under ) {
         // Center the player to the ladders horizontally
-        plr.x = Math.round( plr.x / 16 ) * 16;
+        if ( tiles.under.ladders & 1 ) {
+          // Ceil X, CX
+          plr.x = Math.ceil( plr.x / 16 ) * 16;
+        }
+        else if ( tiles.under.ladders & 2 ) {
+          // Floor X, FX
+          plr.x = Math.floor( plr.x / 16 ) * 16;
+        }
+        plr.climbing = 1;
+        plr.frame = 0;
+        plr.anim = "climb";
+      }
+      else if ( "ladders" in tiles.below ) {
+        // We can also start climbing down if there's ladders below the player
+        if ( tiles.below.ladders & 1 ) {
+          // Ceil X, CX
+          plr.x = Math.ceil( plr.x / 16 ) * 16;
+        }
+        else if ( tiles.below.ladders & 2 ) {
+          // Floor X, FX
+          plr.x = Math.floor( plr.x / 16 ) * 16;
+        }
         plr.climbing = 1;
         plr.frame = 0;
         plr.anim = "climb";
@@ -495,26 +529,20 @@ function update( modifier ) {
   }
   
   // Check collisions with map
-  var wallHit = false;
-  if( inTile("under", "wall") ) {
-    wallHit = true;
-  }
-  if ( wallHit ) {
-    plr.x = Math.round( plr.safex );
-    plr.y = Math.round( plr.safey ) - 1;
-  }
-  else {
-    plr.safex = plr.x;
-    plr.safey = plr.y;
-  }
+  var hitDirections = checkMapCollisions();
+  if( Object.keys(hitDirections).length > 0 ) debugObj["Hit wall"] = true;
+  else debugObj["Hit wall"] = false;
   
-  debugObj["wallHit"] = wallHit;
-  
-  // Release climbing-status if the player is not on ladders
+  /* // Release climbing-status if the player is not on ladders
   if( !inTile("under", "ladders") ) {
     plr.climbing = 0;
   }
+  */
   
+  // Check whether we hit the floor
+  if( "below" in hitDirections ) plr.onfloor = true;
+  
+  debugObj["plr.onfloor"] = plr.onfloor;
   
   // Move the "camera" with WASD
   camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed; // [D] - [A]
@@ -643,6 +671,57 @@ function update( modifier ) {
   scr.y = -Math.round( camera.y );
 }
 
+// Update collisions with map
+function checkMapCollisions() {
+  if ( !allLevelsLoaded ) {
+    return {};
+  }
+  
+  var tileMap = levels[levels.current].tileMap;
+  
+  var hitDirections = {};
+  
+  if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
+    // We are hitting a wall from below and right
+    if( inTile("below", "wall") ) hitDirections["below"] = true;
+    if( inTile("right", "wall") ) hitDirections["right"] = true;
+  }
+  else if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
+    // We are hitting a wall from above and right
+    if( inTile("above", "wall") ) hitDirections["above"] = true;
+    if( inTile("right", "wall") ) hitDirections["right"] = true;
+  }
+  else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
+    // We are hitting a wall from below and left
+    if( inTile("below", "wall") ) hitDirections["below"] = true;
+    if( inTile("left", "wall") ) hitDirections["left"] = true;
+  }
+  else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
+    // We are hitting a wall from above and left
+    if( inTile("above", "wall") ) hitDirections["above"] = true;
+    if( inTile("left", "wall") ) hitDirections["left"] = true;
+  }
+  
+  // Only restrict player's horizontal movement if there's collisions on sides
+  if( "left" in hitDirections || "right" in hitDirections ) {
+    plr.x = plr.safex;
+  }
+  else {
+    plr.safex = plr.x;
+  }
+  
+  // Only restrict player's vertical movement if there's collisions on above/below
+  if( "above" in hitDirections || "below" in hitDirections ) {
+    plr.y = plr.safey;
+  }
+  else {
+    plr.safey = plr.y;
+  }
+  
+  return hitDirections;
+}
+
+// Load a level and set it as the current one
 function playLevel( level ) {
   if( allLevelsLoaded == false ) { return false; }
   var lvl = null;
@@ -701,6 +780,7 @@ function playLevel( level ) {
   return true;
 }
 
+// Draw the current level
 function drawCurrentLevel( ) {
   if ( levels.current < 1 ) { 
     return false;
@@ -724,6 +804,7 @@ function drawCurrentLevel( ) {
   }
 }
 
+// Get tile type based on the RGBa value of a pixel
 function tileType( r, g, b, a ) {
   if( a == 0 ) { // Nothing
     return "";
@@ -753,70 +834,76 @@ function tileType( r, g, b, a ) {
   return "";
 }
 
+// Update nearby tiles and set the info to tiles-object
 function updateNearbyTiles() {
   if ( !allLevelsLoaded ) {
     return "";
   }
   var tileMap = levels[levels.current].tileMap;
   var tileX = Math.round( ( plr.x ) / 16 );
-  var tileCeilX = Math.ceil( Math.round( plr.x ) / 16 );
-  var tileFloorX = Math.floor( Math.round( plr.x ) / 16 );
+  var tileCeilX = Math.ceil( ( plr.x-1 ) / 16 );
+  var tileFloorX = Math.floor( ( plr.x+1 ) / 16 );
   var tileY = Math.round( ( plr.y ) / 24 );
-  var tileCeilY = Math.ceil( Math.round( plr.y ) / 24 );
-  var tileFloorY = Math.floor( Math.round( plr.y ) / 24 );
+  var tileCeilY = Math.ceil( ( plr.y-1 ) / 24 );
+  var tileFloorY = Math.floor( ( plr.y+1 ) / 24 );
   
+  /*
   debugObj["tileX"] = tileX;
   debugObj["tileCeilX"] = tileCeilX;
   debugObj["tileFloorX"] = tileFloorX;
   debugObj["tileY"] = tileY;
   debugObj["tileCeilY"] = tileCeilY;
   debugObj["tileFloorY"] = tileFloorY;
+  */
   
   // Reset tiles
-  tiles.under = [];
-  tiles.left = [];
-  tiles.right = [];
-  tiles.above = [];
-  tiles.below = [];
+  tiles.under = {};
+  tiles.left = {};
+  tiles.right = {};
+  tiles.above = {};
+  tiles.below = {};
   
-  tiles.under.push( tileMap[tileX][tileCeilY] );
-  tiles.under.push( tileMap[tileX][tileFloorY] );
-  tiles.under.push( tileMap[tileCeilX][tileY] );
-  tiles.under.push( tileMap[tileFloorX][tileY] );
+  tiles.under[tileMap[tileCeilX][tileY]] |= 1;
+  tiles.under[tileMap[tileFloorX][tileY]] |= 2;
+  tiles.under[tileMap[tileX][tileCeilY]] |= 4;
+  tiles.under[tileMap[tileX][tileFloorY]] |= 8;
   
   if( tileX > 0 ) {
-    tiles.left.push( tileMap[tileX-1][tileCeilY] );
-    tiles.left.push( tileMap[tileX-1][tileFloorY] );
+    tiles.left[tileMap[tileX-1][tileCeilY]] |= 4;
+    tiles.left[tileMap[tileX-1][tileFloorY]] |= 8;
   } else {
-    tiles.left.push( "wall" );
-    tiles.left.push( "wall" );
+    tiles.left["wall"] |= 4;
+    tiles.left["wall"] |= 8;
   }
   
   if( tileX < levels[levels.current].w ) {
-    tiles.right.push( tileMap[tileX+1][tileCeilY] );
-    tiles.right.push( tileMap[tileX+1][tileFloorY] );
+    tiles.right[tileMap[tileX+1][tileCeilY]] |= 4;
+    tiles.right[tileMap[tileX+1][tileFloorY]] |= 8;
   } else {
-    tiles.right.push( "wall" );
-    tiles.right.push( "wall" );
+    tiles.right["wall"] |= 4;
+    tiles.right["wall"] |= 8;
   }
   
   if( tileY > 0 ) {
-    tiles.above.push( tileMap[tileCeilX][tileY-1] );
-    tiles.above.push( tileMap[tileFloorX][tileY-1] );
+    tiles.above[tileMap[tileCeilX][tileY-1]] |= 1;
+    tiles.above[tileMap[tileFloorX][tileY-1]] |= 2;
   } else {
-    tiles.above.push( "wall" );
-    tiles.above.push( "wall" );
+    tiles.above["wall"] |= 1;
+    tiles.above["wall"] |= 2;
   }
   
   if( tileCeilY < levels[levels.current].h ) {
-    tiles.below.push( tileMap[tileCeilX][tileY+1] );
-    tiles.below.push( tileMap[tileFloorX][tileY+1] );
+    tiles.below[tileMap[tileCeilX][tileY+1]] |= 1;
+    tiles.below[tileMap[tileFloorX][tileY+1]] |= 2;
   } else {
-    tiles.below.push( "wall" );
-    tiles.below.push( "wall" );
+    tiles.below["wall"] |= 1;
+    tiles.below["wall"] |= 2;
   }
 }
 
+// Check if a specific tile is in a specific direction
+// Example: check if there's ladders below the player:
+//    inTile( "below", "ladders" );
 function inTile( direction, tileType ) {
   var arr = null;
   switch( direction ) {
@@ -839,18 +926,23 @@ function inTile( direction, tileType ) {
       return false;
   }
   
-  for( var i=0, n=arr.length; i<n; ++i ) {
-    if( arr[i] == tileType ) {
-      return true;
-    }
-  }
-  return false;
+  return ( tileType in arr );
 }
 
+// Returns the tiles in certain direction as a string. Useful for debugging.
 function getTilesAsString( direction ) {
   var ret = "";
   for( o in tiles[direction] ) {
-    ret += tiles[direction][o] + " ";
+    if( o != "" ) {
+      var pos = "";
+      var bitmask = tiles[direction][o];
+      if( bitmask & 1 ) pos += "CX";
+      if( bitmask & 2 ) pos += "FX";
+      if( bitmask & 4 ) pos += "CY";
+      if( bitmask & 8 ) pos += "FY";
+      
+      ret += pos + ":" + o;
+    }
   }
   return ret;
 }
