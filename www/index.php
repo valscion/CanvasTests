@@ -37,9 +37,12 @@
   <!-- JavaScript at the bottom for fast page loading -->
   
   <!-- Grab Google CDN's jQuery, with a protocol relative URL; fall back to local if necessary -->
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.6.3/jquery.min.js"></script>
-  <!-- <script>window.jQuery || document.write("<script src='/js/libs/jquery-1.6.3.min.js'>\x3C/script>")</script> -->
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+  <script>window.jQuery || document.write("<script src='libs/jquery-1.6.4.min.js'>\x3C/script>")</script>
 
+  <!-- Kinetic 2d, http://www.kineticjs.com/ -->
+  <script src="libs/kinetic2d-v1.0.2.js"></script>
+  
   <script src="scripts.js?trick=<?=filemtime('scripts.js')?>"></script>
   
   <!-- mathiasbynens.be/notes/async-analytics-snippet -->
