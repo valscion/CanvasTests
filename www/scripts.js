@@ -728,6 +728,17 @@ function updatePlayerControls( modifier ) {
     if( !plr.midair && plr.climbing == 0 ) {
       plr.yPlus = 3.5;
       plr.midair = true;
+      // Decide what animation to play
+      if( 37 in keysDown ) { // -- Left arrow --
+        plr.anim = "jumpleft";
+      }
+      else if( 39 in keysDown ) { // -- Right arrow --
+        plr.anim = "jumpright";
+      }
+      else {
+        // If we're not moving anywhere, play something else than "stance" animation.
+        plr.anim = "jumpleft";
+      }
     }
   }
 }
