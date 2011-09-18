@@ -892,6 +892,12 @@ function playLevel( level ) {
   for (var i = 0, n = data.length; i < n; i += 4) {
     tileMap[x][y] = tileType( data[i], data[i+1], data[i+2], data[i+3] );
     
+    // If that was the startpoint, set player coordinates.
+    if( tileMap[x][y] == "start" ) {
+      plr.x = x*16 + plr.w/2;
+      plr.y = y*24;
+    }
+    
     ++x;
     if( x >= width ) {
       x = 0;
