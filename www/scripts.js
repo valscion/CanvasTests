@@ -778,27 +778,41 @@ function checkMapCollisions() {
   
   var hitDirections = {};
   
-  if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
-    // We are hitting a wall from below and right
-    if( "wall" in tiles.below ) hitDirections["below"] = true;
-    if( "wall" in tiles.right ) hitDirections["right"] = true;
+  try {
+    var checkTile = tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )];
+    if( typeof checkTile === 'undefined' || checkTile == "wall" ) {
+      // We are hitting a wall from below and right
+      if( "wall" in tiles.below ) hitDirections["below"] = true;
+      if( "wall" in tiles.right ) hitDirections["right"] = true;
+    }
+    checkTile = tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )];
+    if( typeof checkTile === 'undefined' || checkTile == "wall" ) {
+      // We are hitting a wall from above and right
+      if( "wall" in tiles.above ) hitDirections["above"] = true;
+      if( "wall" in tiles.right ) hitDirections["right"] = true;
+    }
+    checkTile = tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )];
+    if( typeof checkTile === 'undefined' || checkTile == "wall" ) {
+      // We are hitting a wall from below and left
+      if( "wall" in tiles.below ) hitDirections["below"] = true;
+      if( "wall" in tiles.left ) hitDirections["left"] = true;
+    }
+    checkTile = tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )];
+    if( typeof checkTile === 'undefined' || checkTile == "wall" ) {
+      // We are hitting a wall from above and left
+      if( "wall" in tiles.above ) hitDirections["above"] = true;
+      if( "wall" in tiles.left ) hitDirections["left"] = true;
+    }
   }
-  else if( tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
-    // We are hitting a wall from above and right
-    if( "wall" in tiles.above ) hitDirections["above"] = true;
-    if( "wall" in tiles.right ) hitDirections["right"] = true;
+  catch(e) {
+    // Probably the tileMaps x-coordinate was malformed. Let's just set
+    // all directions as if we had hit them.
+    hitDirections["below"] = true;
+    hitDirections["above"] = true;
+    hitDirections["left"] = true;
+    hitDirections["right"] = true;
   }
-  else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )] == "wall" ) {
-    // We are hitting a wall from below and left
-    if( "wall" in tiles.below ) hitDirections["below"] = true;
-    if( "wall" in tiles.left ) hitDirections["left"] = true;
-  }
-  else if( tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )] == "wall" ) {
-    // We are hitting a wall from above and left
-    if( "wall" in tiles.above ) hitDirections["above"] = true;
-    if( "wall" in tiles.left ) hitDirections["left"] = true;
-  }
-  
+    
   // Only restrict player's horizontal movement if there's collisions on sides
   if( "left" in hitDirections || "right" in hitDirections ) {
     plr.x = plr.safex;
