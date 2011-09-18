@@ -464,7 +464,7 @@ function update( modifier ) {
     plr.y = plr.safey += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
   }
   
-  // Don't let the player escape outside the screen!
+  /* // Don't let the player escape outside the screen!
   if ( plr.x + plr.w + camera.x > scr.w - camera.border ) {
     camera.x = scr.w - camera.border - plr.x - plr.w;
   }
@@ -476,6 +476,30 @@ function update( modifier ) {
   }
   else if ( plr.y + camera.y < camera.border ) {
     camera.y = camera.border - plr.y;
+  }
+  */
+  
+  // Glue the camera to the player
+  camera.x = scr.w/2 - plr.x;
+  camera.y = scr.h/2 - plr.y;
+  
+  // Camera can't go outside the worlds boundaries. If the world is smaller than
+  // the screen, center the camera to the middle of the screen.
+  var level = levels[levels.current];
+  
+  if( scr.w < level.w*16 ) {
+    if ( camera.x > 0 ) camera.x = 0;
+    if ( camera.x < scr.w - level.w*16 ) camera.x = scr.w - level.w*16;
+  }
+  else {
+    camera.x = scr.w/2 - level.w*8;
+  }
+  if( scr.h < level.h*24 ) {
+    if ( camera.y > 0 ) camera.y = 0;
+    if ( camera.y < scr.h - level.h*24 ) camera.y = scr.h - level.h*24;
+  }
+  else {
+    camera.y = scr.h/2 - level.h*12;
   }
   
   // Ugly hack to release climbing animation
@@ -874,22 +898,34 @@ function drawCurrentLevel( ) {
   if ( levels.current < 1 ) { 
     return false;
   }
-  var tileMap = levels[levels.current].tileMap;
-  
+  var level = levels[levels.current];
+  var tileMap = level.tileMap;
   
   var coinFrame = Math.round( animTimers["coins"].val * 5 );
-  for( var i=0, ni = tileMap.length; i < ni; ++i ) {
-    for( var j=0, nj = tileMap[i].length; j < nj; j++ ) {
-      if( tileMap[i][j] == "wall" ) {
-        ctx.drawImage( sprites.walls, 0, 0, 16, 24, i*16, j*24, 16, 24 );
+  
+  // Limit those loops to draw only those tiles that are visible
+  
+  var x = Math.floor( scr.x / 16 ); if( x < 0 ) x = 0;
+  var y = Math.floor( scr.y / 24 ); if( y < 0 ) y = 0;
+  var nx = Math.ceil( ( scr.x + scr.w ) / 16 ); if( nx > level.w ) nx = level.w;
+  var ny = Math.ceil( ( scr.y + scr.h ) / 24 ); if( ny > level.h ) ny = level.h;
+  
+  //var x = 0, y = 0, nx = level.w, ny = level.h;
+  while(x < nx ) {
+    while( y < ny ) {
+      if( tileMap[x][y] == "wall" ) {
+        ctx.drawImage( sprites.walls, 0, 0, 16, 24, x*16, y*24, 16, 24 );
       }
-      else if( tileMap[i][j] == "ladders" ) {
-        ctx.drawImage( sprites.ladders, 0, 0, 16, 24, i*16, j*24, 16, 24 );
+      else if( tileMap[x][y] == "ladders" ) {
+        ctx.drawImage( sprites.ladders, 0, 0, 16, 24, x*16, y*24, 16, 24 );
       }
-      else if( tileMap[i][j] == "coin" ) {
-        ctx.drawImage( sprites.coin, coinFrame*16, 0, 16, 24, i*16, j*24, 16, 24 );
+      else if( tileMap[x][y] == "coin" ) {
+        ctx.drawImage( sprites.coin, coinFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
       }
+      ++y;
     }
+    ++x;
+    y = 0;
   }
 }
 
@@ -1061,8 +1097,9 @@ function reset() {
 }
 
 // Main loop
+var forceExit = false;
 var main = function () {
-  if( 19 in keysDown ) { // -- Pause/break --
+  if( 19 in keysDown || forceExit == true ) { // -- Pause/break --
     // Emergency stop. Need to refresh page to start the script again.
     // Disable key-prevention, too.
     preventKeyDefaults = false;
