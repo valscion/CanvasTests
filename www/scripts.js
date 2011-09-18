@@ -37,7 +37,8 @@ var plr = {
   safex : 0,        // -- Last player x-coordinate where there was no collision
   safey : 0,        // -- Last player y-coordinate where there was no collision
   weight : 70,      // Player weight in kg
-  yPlus : 0         // Gravity acceleration
+  yPlus : 0,        // Gravity acceleration
+  jumpPower : 25000 // Jump power in newtons
 }
 
 // Store objects that have gravity.
@@ -93,7 +94,7 @@ var debugObj = {}
 var showDebug = true;
 
 // Constant for gravity
-const GRAVITY = -0.08;
+const GRAVITY = 800;
 
 // Create the canvas
 var canvas = document.createElement("canvas");
@@ -750,7 +751,7 @@ function updatePlayerControls( modifier ) {
   // JUMP
   if( 90 in keysDown ) { // [Z]
     if( !plr.midair && plr.climbing == 0 ) {
-      plr.yPlus = 3.5;
+      plr.yPlus = plr.jumpPower / plr.weight;
       plr.midair = true;
       // Decide what animation to play
       if( 37 in keysDown ) { // -- Left arrow --
@@ -825,8 +826,8 @@ function updateGravity( modifier ) {
   for( o in gravObj ) {
     var obj = gravObj[o];
     if( obj.midair ) {
-      obj.yPlus += GRAVITY * obj.weight * modifier;
-      obj.y -= obj.yPlus;
+      obj.yPlus -= GRAVITY * modifier;
+      obj.y -= obj.yPlus * modifier;
     }
     else {
       obj.yPlus = 0;
