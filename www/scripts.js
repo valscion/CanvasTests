@@ -1125,6 +1125,7 @@ var main = function () {
     // Disable key-prevention, too.
     preventKeyDefaults = false;
     clearInterval( mainInterval );
+    return false;
   }
 
   var now = Date.now();
