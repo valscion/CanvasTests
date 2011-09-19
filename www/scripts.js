@@ -92,7 +92,8 @@ var levels = {
     dataImg : null,
     tileMap : null,
     w : null,
-    h : null
+    h : null,
+    crumbles : {}
   }
 }
 var levelsLoaded = 0;
@@ -290,23 +291,32 @@ $("body").click( function(e) {
 });
 
 // Creating a new animation timer and appending it to the animTimers-object
-function createAnimTimer( key, speed, oscillate ) {
-  if( typeof oscillate != 'undefined' && oscillate != false ) {
-    oscillate = true;
-  } else {
-    oscillate = false;
-  }
-
+function createAnimTimer( key, speed, maxValue ) {
   animTimers[key] = {};
   
+  var tmpSpeed = speed * maxValue;
+  
   animTimers[key].toggled = false;       // Is timer toggled
-  animTimers[key].val = 0.0;             // Current value of the timer (from 0.0 to 1.0)
+  animTimers[key].value = 0.0;           // Current value of the timer (from 0.0 to maxValue)
   animTimers[key].running = false;       // Is the timer running
-  animTimers[key].speed = speed;         // How fast does timer go from 0.0 to 1.0 in seconds
-  animTimers[key].oscillate = oscillate  // Will the timer start counting down from 1 or jump to 0
+  animTimers[key].speed = speed;         // How fast does timer go from 0.0 to maxValue in seconds
+  animTimers[key].maxValue = maxValue    // Highest possible value. After this, reset value to 0.0
   animTimers[key].mod = 1;               // Are we going higher or lower (only used if oscillating)
 }
 var animTimers = {};
+
+// Creating a new flash that oscillates
+function createFlash( key, speed ) {
+  flashes[key] = {};
+  
+  flashes[key].value = 0.0;           // Current value of the timer (from 0.0 to 1.0)
+  flashes[key].toggled = false;       // Is timer toggled
+  flashes[key].running = false;       // Is the timer running
+  flashes[key].speed = speed;         // How fast does timer go from 0.0 to 1.0 in seconds
+  flashes[key].mod = 1;               // Are we going higher or lower (only used if oscillating)
+}
+var flashes = {};
+
 
 // Render all stuff to screen
 function render() {
@@ -358,8 +368,7 @@ function render() {
 
 // Draw debug info
 function drawDebug( x, startY ) {
-  var tmp = Math.round( 255 - ( animTimers.maintext.val * 128 ) );
-  ctx.fillStyle = "rgb("+tmp+","+tmp+",0)";
+  ctx.fillStyle = "rgb(255,255,0)";
   ctx.font = "12px Helvetica";
   ctx.textBaseline = "top";
   var i = 0;
@@ -379,39 +388,40 @@ function drawDebug( x, startY ) {
 
 // Main update function for doing stuff according to delta-time
 function update( modifier ) {
-  // Update flashes / animTimers
-  for( f in animTimers ) {
-    var flash = animTimers[f];
-    if( flash.oscillate ) {
-      if( flash.toggled ) {
-        flash.running = true;
-        flash.val = flash.val + modifier * flash.mod * flash.speed;
-        if( flash.val > 1.0 ) { flash.val = 1.0; flash.mod = -1; }
-        if( flash.val < 0.0 ) { flash.val = 0.0; flash.mod = 1; }
+  // Update flashes
+  for( f in flashes ) {
+    var flash = flashes[f];
+    if( flash.toggled ) {
+      flash.running = true;
+      flash.value = flash.value + modifier * flash.mod * flash.speed;
+      if( flash.value > 1.0 ) { flash.value = 1.0; flash.mod = -1; }
+      if( flash.value < 0.0 ) { flash.value = 0.0; flash.mod = 1; }
+    }
+    else if( flash.running ) {
+      flash.mod = 1;
+      flash.value = flash.value - modifier * flash.speed;
+      if( flash.value < 0.0 ) {
+        flash.value = 0.0;
+        flash.running = false;
       }
-      else if( flash.running ) {
-        flash.mod = 1;
-        flash.val = flash.val - modifier * flash.speed;
-        if( flash.val < 0.0 ) {
-          flash.val = 0.0;
-          flash.running = false;
-        }
-      }
-      else {
-        flash.val = 0.0;
-      }
-    } else {
-      // Much simpler "flash"
-      if( flash.toggled ) {
-        flash.val = flash.val + modifier * flash.speed;
-        if( flash.val > 1.0 ) { flash.val = 0.0; }
-      }
+    }
+    else {
+      flash.value = 0.0;
+    }
+  }
+  
+  // Update animation timers
+  for( a in animTimers ) {
+    var anim = animTimers[a];
+    if( anim.toggled ) {
+      anim.value = anim.value + modifier * anim.speed;
+      if( anim.value > anim.maxValue ) { anim.value = 0.0; }
     }
   }
   
   if( 32 in keysDown) { // -- Spacebar --
-    // Toggle maintext flash
-    animTimers.maintext.toggled = !animTimers.maintext.toggled;
+    // Toggle coins timer
+    animTimers.coins.toggled = !animTimers.coins.toggled;
     delete keysDown[32];
   }
   
@@ -447,11 +457,6 @@ function update( modifier ) {
   // Check frame limits
   if( plr.anim == "runleft" || plr.anim == "runright" ) {
     if( plr.frame > 15 ) { plr.frame = 0.0; }
-  }
-  else if ( plr.anim == "jumpleft" || plr.anim == "jumpright" ) {
-    // Jumping animation is done using animTimers
-    animTimers.jump.toggled = true;
-    plr.frame = animTimers.jump.val * 9;
   }
   else if ( plr.anim == "climb" ) {
     if( plr.frame < 0 ) { plr.frame = 5; }
@@ -917,12 +922,18 @@ function playLevel( level ) {
   var x = 0;
   var y = 0;
   for (var i = 0, n = data.length; i < n; i += 4) {
-    tileMap[x][y] = tileFromColor( data[i], data[i+1], data[i+2], data[i+3] );
+    var tile = tileFromColor( data[i], data[i+1], data[i+2], data[i+3] );
+    tileMap[x][y] = tile;
     
     // If that was the startpoint, set player coordinates.
-    if( tileMap[x][y] == "start" ) {
+    if( tile == "start" ) {
       plr.x = x*16 + plr.w/2;
       plr.y = y*24;
+    }
+    // If that was a crumbling wall, set it's timer
+    else if( tile == "crumblingwall" ) {
+      levels[lvl].crumbles[x] = {};
+      levels[lvl].crumbles[x][y] = 0.0;
     }
     
     ++x;
@@ -937,7 +948,7 @@ function playLevel( level ) {
   levels[lvl].h = height;
   
   animTimers["coins"].toggled = true;
-  animTimers["coins"].val = 0.0;
+  animTimers["coins"].value = 0.0;
   return true;
 }
 
@@ -949,7 +960,7 @@ function drawCurrentLevel( ) {
   var level = levels[levels.current];
   var tileMap = level.tileMap;
   
-  var coinFrame = Math.round( animTimers["coins"].val * 5 );
+  var coinFrame = Math.round( animTimers["coins"].value );
   
   // Limit those loops to draw only those tiles that are visible
   
@@ -969,6 +980,10 @@ function drawCurrentLevel( ) {
       }
       else if( tileMap[x][y] == "coin" ) {
         ctx.drawImage( sprites.coin, coinFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
+      }
+      else if( tileMap[x][y] == "crumblingwall" ) {
+        var crumbleFrame = Math.round( level.crumbles[x][y] * 8 );
+        ctx.drawImage( sprites.walls, crumbleFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
       }
       ++y;
     }
@@ -1000,8 +1015,8 @@ function tileFromColor( r, g, b, a ) {
   }
   
   if( r == 128 && g == 128 && b == 128 ) { // Crumbling wall
-    // return "crumblingwall";
-    return "wall";
+    return "crumblingwall";
+    // return "wall";
   }
   
   return "";
@@ -1161,9 +1176,7 @@ var main = function () {
 // Run it!
 loadSprites();
 loadLevels();
-reset();
-createAnimTimer( "maintext", 1.0, true );
-createAnimTimer( "coins", 1.0 );
-createAnimTimer( "jump", 1.0 );
+// reset();
+createAnimTimer( "coins", 1.0, 5.49 );
 var then = Date.now();
 var mainInterval = setInterval(main, 10); // Run (almost) as fast as possible
