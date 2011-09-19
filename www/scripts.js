@@ -2,6 +2,17 @@
  * Author: Vesa "VesQ" Laakso
  */
 
+// usage: log('inside coolFunc', this, arguments);
+// paulirish.com/2009/log-a-lightweight-wrapper-for-consolelog/
+window.log = function(){
+  log.history = log.history || [];   // store logs to an array for reference
+  log.history.push(arguments);
+  if(this.console) console.log( Array.prototype.slice.call(arguments) );
+};
+// make it safe to use console.log always
+(function(b){function c(){}for(var d="assert,count,debug,dir,dirxml,error,exception,group,groupCollapsed,groupEnd,info,log,markTimeline,profile,profileEnd,time,timeEnd,trace,warn".split(","),a;a=d.pop();)b[a]=b[a]||c})(window.console=window.console||{});
+
+
 // Information about screen
 var scr = {
   w : 640,            // Canvas width
@@ -91,7 +102,7 @@ var levelsAmount = 1;
 
 // Object for drawing stuff as debug info
 var debugObj = {}
-var showDebug = true;
+var DEBUG = true;
 
 // Constant for gravity
 const GRAVITY = 800;
@@ -319,27 +330,29 @@ function render() {
   */
   
   // Draw some debug-info
-  debugObj["plr.midair"] = plr.midair;
-  debugObj["plr.climbing"] = plr.climbing;
-  debugObj["plr.x:"] = plr.x;
-  debugObj["plr.y:"] = plr.y;
-  debugObj["camera.x:"] = camera.x;
-  debugObj["camera.y:"] = camera.y;
-  var mousePos = kinetic.getMousePos();
-  if( mousePos != null ) {
-    debugObj["Mouse X:"] = mousePos.x;
-    debugObj["Mouse Y:"] = mousePos.y;
-  } else {
-    debugObj["Mouse X:"] = "No mouseover";
-    debugObj["Mouse Y:"] = "No mouseover";
+  if( DEBUG ) {
+    debugObj["plr.midair"] = plr.midair;
+    debugObj["plr.climbing"] = plr.climbing;
+    debugObj["plr.x:"] = plr.x;
+    debugObj["plr.y:"] = plr.y;
+    debugObj["camera.x:"] = camera.x;
+    debugObj["camera.y:"] = camera.y;
+    var mousePos = kinetic.getMousePos();
+    if( mousePos != null ) {
+      debugObj["Mouse X:"] = mousePos.x;
+      debugObj["Mouse Y:"] = mousePos.y;
+    } else {
+      debugObj["Mouse X:"] = "No mouseover";
+      debugObj["Mouse Y:"] = "No mouseover";
+    }
+    debugObj["Under tile:"] = getTilesAsString("under");
+    debugObj["Left tile:"] = getTilesAsString("left");
+    debugObj["Right tile:"] = getTilesAsString("right");
+    debugObj["Above tile:"] = getTilesAsString("above");
+    debugObj["Below tile:"] = getTilesAsString("below");
+    
+    drawDebug( scr.x + scr.w-150, scr.y+24 );
   }
-  debugObj["Under tile:"] = getTilesAsString("under");
-  debugObj["Left tile:"] = getTilesAsString("left");
-  debugObj["Right tile:"] = getTilesAsString("right");
-  debugObj["Above tile:"] = getTilesAsString("above");
-  debugObj["Below tile:"] = getTilesAsString("below");
-  
-  drawDebug( scr.x + scr.w-150, scr.y+24 );
   // Draw the dude
   drawPlayer();
 }
@@ -403,21 +416,31 @@ function update( modifier ) {
     delete keysDown[32];
   }
   
-  // Clicking on the canvas sets the player coordinates
-  var mousePos = kinetic.getMousePos();
-  if( mouseClicked && mousePos !== null ) {
-    plr.x = scr.x + mousePos.x;
-    plr.y = scr.y + mousePos.y;
-    plr.midair = true;
+  if( 16 in keysDown && 68 in keysDown ) { // -- Shift + [D] --
+    // Toggle debug
+    DEBUG = !DEBUG;
+    log('inside update','DEBUG toggled to ' + DEBUG);
+    delete keysDown[68];
   }
+  
+  // Clicking on the canvas sets the player coordinates, if in debug mode
+  if( DEBUG ) {
+    var mousePos = kinetic.getMousePos();
+    if( mouseClicked && mousePos !== null ) {
+      plr.x = scr.x + mousePos.x - plr.w/2;
+      plr.y = scr.y + mousePos.y - plr.h/2;
+      plr.midair = true;
+      plr.yPlus = 0;
+    }
+  }
+  
+  // Update keys that control player
+  updatePlayerControls( modifier );
   
   // Check whether we are on anything solid or climbing and if not, we're mid-air.
   if( !( ("wall" in tiles.below) || ("ladders" in tiles.below) || plr.climbing ) ) {
     plr.midair = true;
   }
-  
-  // Update keys that control player
-  updatePlayerControls( modifier );
   
   // Check frame limits
   if( plr.anim == "runleft" || plr.anim == "runright" ) {
@@ -435,9 +458,9 @@ function update( modifier ) {
   
   // Check collisions with map
   var hitDirections = checkMapCollisions();
-  debugObj["Hit wall"] = false;
+  if(DEBUG) debugObj["Hit wall"] = false;
   if( Object.keys(hitDirections).length > 0 ) {
-    debugObj["Hit wall"] = getObjectAsString( hitDirections );
+    if(DEBUG) debugObj["Hit wall"] = getObjectAsString( hitDirections );
     if( "below" in hitDirections && plr.yPlus <= 0 ) {
       // If we hit something solid from the bottom, position the player
       // directly above it so that one doesn't just float around.
