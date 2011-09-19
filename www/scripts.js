@@ -917,7 +917,7 @@ function playLevel( level ) {
   var x = 0;
   var y = 0;
   for (var i = 0, n = data.length; i < n; i += 4) {
-    tileMap[x][y] = tileType( data[i], data[i+1], data[i+2], data[i+3] );
+    tileMap[x][y] = tileTypeFromColor( data[i], data[i+1], data[i+2], data[i+3] );
     
     // If that was the startpoint, set player coordinates.
     if( tileMap[x][y] == "start" ) {
@@ -978,7 +978,7 @@ function drawCurrentLevel( ) {
 }
 
 // Get tile type based on the RGBa value of a pixel
-function tileType( r, g, b, a ) {
+function tileTypeFromColor( r, g, b, a ) {
   if( a == 0 ) { // Nothing
     return "";
   }
