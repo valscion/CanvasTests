@@ -28,7 +28,6 @@ var scr = {
 var camera = {
   x : 0,
   y : 0,
-  speed : 64,   // Speed of camera when moving it via WASD (in px per sec)
   border : 20   // How far away from the border of the canvas we may go
                 // with our player before camera is moved
 }
@@ -478,146 +477,19 @@ function update( modifier ) {
     plr.climbing = 0;
   }
   
-  // Move the "camera" with WASD
-  camera.x += ( ( 68 in keysDown ) - ( 65 in keysDown ) ) * modifier * camera.speed; // [D] - [A]
-  camera.y += ( ( 83 in keysDown ) - ( 87 in keysDown ) ) * modifier * camera.speed; // [S] - [W]
-  
   // Move the player arbitrary with IJKL
-  if( (73 in keysDown)||(74 in keysDown)||(75 in keysDown)||(76 in keysDown) ) {
-    plr.x = plr.safex += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
-    plr.y = plr.safey += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
-  }
-  
-  /* // Don't let the player escape outside the screen!
-  if ( plr.x + plr.w + camera.x > scr.w - camera.border ) {
-    camera.x = scr.w - camera.border - plr.x - plr.w;
-  }
-  else if ( plr.x + camera.x < camera.border ) {
-    camera.x = camera.border - plr.x;
-  }
-  if ( plr.y + plr.h + camera.y > scr.h - camera.border ) {
-    camera.y = scr.h - camera.border - plr.y - plr.h;
-  }
-  else if ( plr.y + camera.y < camera.border ) {
-    camera.y = camera.border - plr.y;
-  }
-  */
-  
-  // Glue the camera to the player
-  camera.x = scr.w/2 - plr.x;
-  camera.y = scr.h/2 - plr.y;
-  
-  // Camera can't go outside the worlds boundaries. If the world is smaller than
-  // the screen, center the camera to the middle of the screen.
-  var level = levels[levels.current];
-  
-  if( scr.w < level.w*16 ) {
-    if ( camera.x > 0 ) camera.x = 0;
-    if ( camera.x < scr.w - level.w*16 ) camera.x = scr.w - level.w*16;
-  }
-  else {
-    camera.x = scr.w/2 - level.w*8;
-  }
-  if( scr.h < level.h*24 ) {
-    if ( camera.y > 0 ) camera.y = 0;
-    if ( camera.y < scr.h - level.h*24 ) camera.y = scr.h - level.h*24;
-  }
-  else {
-    camera.y = scr.h/2 - level.h*12;
-  }
-  
-  // Ugly hack to release climbing animation
-  if ( 13 in keysDown ) {
-    plr.climbing = false;
-  }
-  
-  // If we want to change the canvas width or height, modify these variables below.
-  var newWidth = scr.w;
-  var newHeight = scr.h;
-  
-  /*  // Modify canvas width and height with IJKL
-  newWidth  += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
-  newHeight += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
-  */
-  
-  // Also check whether we pressed F11. If so, toggle fullscreen!
-  if( 122 in keysDown ) {
-    delete keysDown[122];
-    scr.fullscreen = !scr.fullscreen;
-    // Did we just toggle it ON?
-    if ( scr.fullscreen ) {
-      // Save old dimensions
-      scr.normalw = scr.w;
-      scr.normalh = scr.h;
-   
-      newWidth = screen.width;
-      newHeight = screen.height;
-      
-      // Pop the canvas out of the normal flow
-      $("#canvascontainer").css({
-        'border': '0',
-        'margin' : '0',
-        'position' : 'absolute',
-        'left' : '0',
-        'top' : '0',
-        'background-color': 'black'
-      });
-    }
-    else {
-      // Reset old dimensions
-      newWidth = scr.normalw;
-      newHeight = scr.normalh;
-      
-      // Pop the canvas back to its normal position.
-      $("#canvascontainer").css({
-        'border': '1px solid #777',
-        'margin-left': 'auto',
-        'margin-right': 'auto',
-        'margin-top': '20px',
-        'position': 'static',
-        'left' : 'auto',
-        'top' : 'auto',
-        'background-color': 'transparent'
-      });
-    }
-  }
-  // Wait for the browser to be in fullscreen before resizing canvas
-  if( scr.fullscreen ) {
-    var waitStart = Date.now();
-    while( screen.availWidth < 1 || screen.availHeight < 1 ) {
-      // Wait for max. 2,5s and then forget fullscreen
-      if( Date.now() - waitStart > 2500 ) {
-        scr.fullscreen = false;
-        
-        // Reset old dimensions
-        newWidth = scr.normalw;
-        newHeight = scr.normalh;
-      
-        // Pop the canvas back to its normal position.
-        $("canvas").css('position','static');
-        
-        alert("fail");
-        
-        break;
-      }
-    }
-    if ( scr.fullScreen ) {
-      // If the while-loop waited successfully, set new dimensions.
-      newWidth = screen.width;
-      newHeight = screen.height;
+  if(DEBUG) {
+    if( (73 in keysDown)||(74 in keysDown)||(75 in keysDown)||(76 in keysDown) ) {
+      plr.x = plr.safex += ( ( 76 in keysDown ) - ( 74 in keysDown ) ); // [L] - [J]
+      plr.y = plr.safey += ( ( 75 in keysDown ) - ( 73 in keysDown ) ); // [K] - [I]
     }
   }
   
-  if ( newWidth != scr.w ) {
-    scr.w = newWidth;
-    $("#canvascontainer").width( scr.w );
-    canvas.width = scr.w;
-  }
-  if ( newHeight != scr.h ) {
-    scr.h = newHeight;
-    $("#canvascontainer").height( scr.h );
-    canvas.height = scr.h;
-  }
+  // Update camera movement et cetera
+  updateCamera();
+  
+  // Update screen/canvas width and height
+  updateScreenDimensions();
 
   // Position the canvas according to camera.x and camera.y
   ctx.restore();
@@ -788,6 +660,135 @@ function updatePlayerControls( modifier ) {
         plr.anim = "jumpleft";
       }
     }
+  }
+}
+
+// Update camera movement et cetera
+function updateCamera() {
+  
+  /* // Don't let the player escape outside the screen!
+  if ( plr.x + plr.w + camera.x > scr.w - camera.border ) {
+    camera.x = scr.w - camera.border - plr.x - plr.w;
+  }
+  else if ( plr.x + camera.x < camera.border ) {
+    camera.x = camera.border - plr.x;
+  }
+  if ( plr.y + plr.h + camera.y > scr.h - camera.border ) {
+    camera.y = scr.h - camera.border - plr.y - plr.h;
+  }
+  else if ( plr.y + camera.y < camera.border ) {
+    camera.y = camera.border - plr.y;
+  }
+  */
+  
+  // Glue the camera to the player
+  camera.x = scr.w/2 - plr.x;
+  camera.y = scr.h/2 - plr.y;
+  
+  // Camera can't go outside the worlds boundaries. If the world is smaller than
+  // the screen, center the camera to the middle of the screen.
+  var level = levels[levels.current];
+  
+  if( scr.w < level.w*16 ) {
+    if ( camera.x > 0 ) camera.x = 0;
+    if ( camera.x < scr.w - level.w*16 ) camera.x = scr.w - level.w*16;
+  }
+  else {
+    camera.x = scr.w/2 - level.w*8;
+  }
+  if( scr.h < level.h*24 ) {
+    if ( camera.y > 0 ) camera.y = 0;
+    if ( camera.y < scr.h - level.h*24 ) camera.y = scr.h - level.h*24;
+  }
+  else {
+    camera.y = scr.h/2 - level.h*12;
+  }
+}
+
+// Update screen/canvas width and height
+function updateScreenDimensions() {
+
+  // If we want to change the canvas width or height, modify these variables below.
+  var newWidth = scr.w;
+  var newHeight = scr.h;
+  
+  // Check whether we pressed F11. If so, toggle fullscreen!
+  if( 122 in keysDown ) {
+    delete keysDown[122];
+    scr.fullscreen = !scr.fullscreen;
+    // Did we just toggle it ON?
+    if ( scr.fullscreen ) {
+      // Save old dimensions
+      scr.normalw = scr.w;
+      scr.normalh = scr.h;
+   
+      newWidth = screen.width;
+      newHeight = screen.height;
+      
+      // Pop the canvas out of the normal flow
+      $("#canvascontainer").css({
+        'border': '0',
+        'margin' : '0',
+        'position' : 'absolute',
+        'left' : '0',
+        'top' : '0',
+        'background-color': 'black'
+      });
+    }
+    else {
+      // Reset old dimensions
+      newWidth = scr.normalw;
+      newHeight = scr.normalh;
+      
+      // Pop the canvas back to its normal position.
+      $("#canvascontainer").css({
+        'border': '1px solid #777',
+        'margin-left': 'auto',
+        'margin-right': 'auto',
+        'margin-top': '20px',
+        'position': 'static',
+        'left' : 'auto',
+        'top' : 'auto',
+        'background-color': 'transparent'
+      });
+    }
+  }
+  // Wait for the browser to be in fullscreen before resizing canvas
+  if( scr.fullscreen ) {
+    var waitStart = Date.now();
+    while( screen.availWidth < 1 || screen.availHeight < 1 ) {
+      // Wait for max. 2,5s and then forget fullscreen
+      if( Date.now() - waitStart > 2500 ) {
+        scr.fullscreen = false;
+        
+        // Reset old dimensions
+        newWidth = scr.normalw;
+        newHeight = scr.normalh;
+      
+        // Pop the canvas back to its normal position.
+        $("canvas").css('position','static');
+        
+        alert("fail");
+        
+        break;
+      }
+    }
+    if ( scr.fullScreen ) {
+      // If the while-loop waited successfully, set new dimensions.
+      newWidth = screen.width;
+      newHeight = screen.height;
+    }
+  }
+  
+  if ( newWidth != scr.w ) {
+    scr.w = newWidth;
+    $("#canvascontainer").width( scr.w );
+    canvas.width = scr.w;
+  }
+  if ( newHeight != scr.h ) {
+    scr.h = newHeight;
+    $("#canvascontainer").height( scr.h );
+    canvas.height = scr.h;
   }
 }
 
@@ -1146,6 +1147,7 @@ var main = function () {
   if( 19 in keysDown || forceExit == true ) { // -- Pause/break --
     // Emergency stop. Need to refresh page to start the script again.
     // Disable key-prevention, too.
+    log("!!! Emergency stop !!!");
     preventKeyDefaults = false;
     clearInterval( mainInterval );
     return false;
