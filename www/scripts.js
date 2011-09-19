@@ -1074,32 +1074,18 @@ function updateNearbyTiles() {
   }
 }
 
-// Check if a specific tile is in a specific direction
+// Check if some sort of tile is in a specific direction
 // Example: check if there's ladders below the player:
 //    inTile( "below", "ladders" );
+// Example2: check if there's a solid block right to the player:
+//    inTile( "right", "solid" );
 function inTile( direction, tileType ) {
-  var arr = null;
-  switch( direction ) {
-    case "under":
-      arr = tiles.under;
-      break;
-    case "left":
-      arr = tiles.left;
-      break;
-    case "right":
-      arr = tiles.right;
-      break;
-    case "above":
-      arr = tiles.above;
-      break;
-    case "below":
-      arr = tiles.below;
-      break;
+  switch( tileType ) {
+    case "solid":
+      return ( ("wall" in tiles[direction]) || ("crumblingwall" in tiles[direction]) );
     default:
-      return false;
+      return ( tileType in tiles[direction] );
   }
-  
-  return ( tileType in arr );
 }
 
 // Returns the tiles in certain direction as a string. Useful for debugging.
