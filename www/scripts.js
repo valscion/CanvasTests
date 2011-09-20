@@ -436,12 +436,6 @@ function update( modifier ) {
     }
   }
   
-  if( 32 in keysDown) { // -- Spacebar --
-    // Toggle coins timer
-    animTimers.coins.toggled = !animTimers.coins.toggled;
-    delete keysDown[32];
-  }
-  
   if( 16 in keysDown && 68 in keysDown ) { // -- Shift + [D] --
     // Toggle debug
     DEBUG = !DEBUG;
@@ -503,11 +497,6 @@ function update( modifier ) {
       // We hit the ceiling so stop going up
       plr.yPlus = 0.0;
     }
-  }
-  
-  // Release climbing-status if the player is not on ladders
-  if( !inTile("under", "ladders") ) {
-    plr.climbing = 0;
   }
   
   // Move the player arbitrary with IJKL
@@ -620,13 +609,30 @@ function updatePlayerControls( modifier ) {
     if ( !plr.climbing ) {
       if ( "ladders" in tiles.under ) {
         // Center the player to the ladders horizontally
-        if ( tiles.under.ladders & 1 ) {
-          // Ceil X, CX
+        if ( (tiles.under.ladders & 3) && (tiles.under.ladders & 12) ) {
+          // Ceil X and Floor X, C? and F?
+          if(DEBUG) {
+            log("Centered player to ladders with: Math.round( "+ plr.x / 16 +" ) * 16 ");
+            log("  Used math.round because tiles.under.ladders == " + tiles.under.ladders);
+          }
+          plr.x = Math.round( plr.x / 16 ) * 16;
+          xMove = 0;
+        }
+        else if ( tiles.under.ladders & 3 ) {
+          // Ceil X, C?
+          if(DEBUG) {
+            log("Centered player to ladders with: Math.ceil( "+ plr.x / 16 +" ) * 16 ");
+            log("  Used math.ceil because tiles.under.ladders == " + tiles.under.ladders);
+          }
           plr.x = Math.ceil( plr.x / 16 ) * 16;
           xMove = 0;
         }
-        else if ( tiles.under.ladders & 2 ) {
-          // Floor X, FX
+        else if ( tiles.under.ladders & 12 ) {
+          // Floor X, F?
+          if(DEBUG) {
+            log("Centered player to ladders with: Math.floor( "+ plr.x / 16 +" ) * 16 ");
+            log("  Used math.floor because tiles.under.ladders == " + tiles.under.ladders);
+          }
           plr.x = Math.floor( plr.x / 16 ) * 16;
           xMove = 0;
         }
@@ -635,9 +641,8 @@ function updatePlayerControls( modifier ) {
         plr.anim = "climb";
       }
     }
-    
-    if ( plr.climbing ) {
-      // Animate the player
+    else {
+      // We were climbing so animate the player and move it.
       plr.frame += plr.speed * modifier / 12;
       yMove -= plr.speed/2 * modifier;
     }
@@ -649,13 +654,30 @@ function updatePlayerControls( modifier ) {
         var tileObj = null;
         if( "ladders" in tiles.below ) tileObj = tiles.below;
         else tileObj = tiles.under;
-        if ( tileObj.ladders & 1 ) {
-          // Ceil X, CX
+        if ( (tileObj.ladders & 3) && (tileObj.ladders & 12) ) {
+          // Ceil X and Floor X, C? and F?
+          if(DEBUG) {
+            log("Centered player to ladders with: Math.round( "+ plr.x / 16 +" ) * 16 ");
+            log("  Used math.round because tileObj.ladders == " + tileObj.ladders);
+          }
+          plr.x = Math.round( plr.x / 16 ) * 16;
+          xMove = 0;
+        }
+        else if ( tileObj.ladders & 3 ) {
+          // Ceil X, C?
+          if(DEBUG) {
+            log("Centered player to ladders with: Math.ceil( "+ plr.x / 16 +" ) * 16 ");
+            log("  Used math.ceil because tileObj.ladders == " + tileObj.ladders);
+          }
           plr.x = Math.ceil( plr.x / 16 ) * 16;
           xMove = 0;
         }
-        else if ( tileObj.ladders & 2 ) {
-          // Floor X, FX
+        else if ( tileObj.ladders & 12 ) {
+          // Floor X, F?
+          if(DEBUG) {
+            log("Centered player to ladders with: Math.floor( "+ plr.x / 16 +" ) * 16 ");
+            log("  Used math.floor because tileObj.ladders == " + tileObj.ladders);
+          }
           plr.x = Math.floor( plr.x / 16 ) * 16;
           xMove = 0;
         }
@@ -664,7 +686,8 @@ function updatePlayerControls( modifier ) {
         plr.anim = "climb";
       }
     }
-    if ( plr.climbing ) {
+    else {
+      // We were climbing so animate the player and move it.
       plr.frame -= plr.speed * modifier / 12;
       yMove += plr.speed/2 * modifier;
     }
@@ -1095,18 +1118,14 @@ function updateNearbyTiles() {
     return "";
   }
   var tileMap = levels[levels.current].tileMap;
-  var tileX = Math.round( ( plr.x ) / 16 );
   var tileCeilX = Math.ceil( ( plr.x-1 ) / 16 );
   var tileFloorX = Math.floor( ( plr.x+1 ) / 16 );
-  var tileY = Math.round( ( plr.y ) / 24 );
   var tileCeilY = Math.ceil( ( plr.y-1 ) / 24 );
   var tileFloorY = Math.floor( ( plr.y+1 ) / 24 );
   
   /*
-  debugObj["tileX"] = tileX;
   debugObj["tileCeilX"] = tileCeilX;
   debugObj["tileFloorX"] = tileFloorX;
-  debugObj["tileY"] = tileY;
   debugObj["tileCeilY"] = tileCeilY;
   debugObj["tileFloorY"] = tileFloorY;
   */
@@ -1121,10 +1140,10 @@ function updateNearbyTiles() {
   tiles.above = {};
   tiles.below = {};
   
-  tiles.under[tileMap[tileCeilX][tileY]] |= 1;
-  tiles.under[tileMap[tileFloorX][tileY]] |= 2;
-  tiles.under[tileMap[tileX][tileCeilY]] |= 4;
-  tiles.under[tileMap[tileX][tileFloorY]] |= 8;
+  tiles.under[tileMap[tileCeilX][tileCeilY]] |= 1;
+  tiles.under[tileMap[tileCeilX][tileFloorY]] |= 2;
+  tiles.under[tileMap[tileFloorX][tileCeilY]] |= 4;
+  tiles.under[tileMap[tileFloorX][tileFloorY]] |= 8;
   
   if( tileCeilX > 0 ) {
     tiles.left[tileMap[tileCeilX-1][tileCeilY]] |= 4;
@@ -1135,16 +1154,16 @@ function updateNearbyTiles() {
   }
   
   if( tileFloorX < levels[levels.current].w ) {
-    tiles.right[tileMap[tileFloorX+1][tileCeilY]] |= 4;
-    tiles.right[tileMap[tileFloorX+1][tileFloorY]] |= 8;
+    tiles.right[tileMap[tileFloorX+1][tileCeilY]] |= 1;
+    tiles.right[tileMap[tileFloorX+1][tileFloorY]] |= 2;
   } else {
     tiles.right["wall"] |= 4;
     tiles.right["wall"] |= 8;
   }
   
   if( tileCeilY > 0 ) {
-    tiles.above[tileMap[tileCeilX][tileCeilY-1]] |= 1;
-    tiles.above[tileMap[tileFloorX][tileCeilY-1]] |= 2;
+    tiles.above[tileMap[tileCeilX][tileCeilY-1]] |= 2;
+    tiles.above[tileMap[tileFloorX][tileCeilY-1]] |= 8;
   } else {
     tiles.above["wall"] |= 1;
     tiles.above["wall"] |= 2;
@@ -1152,7 +1171,7 @@ function updateNearbyTiles() {
   
   if( tileFloorY < levels[levels.current].h ) {
     tiles.below[tileMap[tileCeilX][tileFloorY+1]] |= 1;
-    tiles.below[tileMap[tileFloorX][tileFloorY+1]] |= 2;
+    tiles.below[tileMap[tileFloorX][tileFloorY+1]] |= 4;
   } else {
     tiles.below["wall"] |= 1;
     tiles.below["wall"] |= 2;
@@ -1180,10 +1199,10 @@ function getTilesAsString( direction ) {
     if( o != "" ) {
       var pos = "";
       var bitmask = tiles[direction][o];
-      if( bitmask & 1 ) pos += "CX";
-      if( bitmask & 2 ) pos += "FX";
-      if( bitmask & 4 ) pos += "CY";
-      if( bitmask & 8 ) pos += "FY";
+      if( bitmask & 1 ) pos += "CC";
+      if( bitmask & 2 ) pos += "CF";
+      if( bitmask & 4 ) pos += "FC";
+      if( bitmask & 8 ) pos += "FF";
       
       ret += pos + ":" + o;
     }
