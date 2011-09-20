@@ -304,7 +304,7 @@ function createAnimTimer( key, speed, maxValue, destroy ) {
   animTimers[key] = {};
   
   var tmpSpeed = maxValue / speed;
-  var tmpDestroy = ( typeof destroy === "boolean" ) ? destroy : false;
+  var tmpDestroy = ( typeof destroy === "boolean" ) ? (destroy?1:0) : 0;
   
   animTimers[key].toggled = false;       // Is timer toggled
   animTimers[key].value = 0.0;           // Current value of the timer (from 0.0 to maxValue)
@@ -425,8 +425,9 @@ function update( modifier ) {
     if( anim.toggled ) {
       anim.value += modifier * anim.speed;
       if( anim.value > anim.maxValue ) { 
-        if( anim.destroy ) {
-          delete animTimers[a];
+        if( anim.destroy > 0 ) {
+          anim.destroy = 2;
+          anim.value = anim.maxValue;
         }
         else { 
           anim.value = 0.0; 
@@ -1040,10 +1041,11 @@ function drawCurrentLevel( ) {
       }
       else if( tileMap[x][y] == "crumblingwall" ) {
         var crumbleTimer = animTimers["crumble("+x+","+y+")"];
-        if( typeof crumbleTimer === "undefined" ) {
+        if( crumbleTimer.destroy == 2 ) {
           // We have gone through the timer already, so we need to delete
-          // the already-crumbled wall from the tilemap.
+          // the already-crumbled wall from the tilemap as well as the timer.
           tileMap[x][y] = "";
+          delete crumbleTimer;
         }
         else {
           var crumbleFrame = Math.floor( crumbleTimer.value );
