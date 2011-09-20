@@ -1126,33 +1126,33 @@ function updateNearbyTiles() {
   tiles.under[tileMap[tileX][tileCeilY]] |= 4;
   tiles.under[tileMap[tileX][tileFloorY]] |= 8;
   
-  if( tileX > 0 ) {
-    tiles.left[tileMap[tileX-1][tileCeilY]] |= 4;
-    tiles.left[tileMap[tileX-1][tileFloorY]] |= 8;
+  if( tileCeilX > 0 ) {
+    tiles.left[tileMap[tileCeilX-1][tileCeilY]] |= 4;
+    tiles.left[tileMap[tileCeilX-1][tileFloorY]] |= 8;
   } else {
     tiles.left["wall"] |= 4;
     tiles.left["wall"] |= 8;
   }
   
-  if( tileX < levels[levels.current].w ) {
-    tiles.right[tileMap[tileX+1][tileCeilY]] |= 4;
-    tiles.right[tileMap[tileX+1][tileFloorY]] |= 8;
+  if( tileFloorX < levels[levels.current].w ) {
+    tiles.right[tileMap[tileFloorX+1][tileCeilY]] |= 4;
+    tiles.right[tileMap[tileFloorX+1][tileFloorY]] |= 8;
   } else {
     tiles.right["wall"] |= 4;
     tiles.right["wall"] |= 8;
   }
   
-  if( tileY > 0 ) {
-    tiles.above[tileMap[tileCeilX][tileY-1]] |= 1;
-    tiles.above[tileMap[tileFloorX][tileY-1]] |= 2;
+  if( tileCeilY > 0 ) {
+    tiles.above[tileMap[tileCeilX][tileCeilY-1]] |= 1;
+    tiles.above[tileMap[tileFloorX][tileCeilY-1]] |= 2;
   } else {
     tiles.above["wall"] |= 1;
     tiles.above["wall"] |= 2;
   }
   
-  if( tileCeilY < levels[levels.current].h ) {
-    tiles.below[tileMap[tileCeilX][tileY+1]] |= 1;
-    tiles.below[tileMap[tileFloorX][tileY+1]] |= 2;
+  if( tileFloorY < levels[levels.current].h ) {
+    tiles.below[tileMap[tileCeilX][tileFloorY+1]] |= 1;
+    tiles.below[tileMap[tileFloorX][tileFloorY+1]] |= 2;
   } else {
     tiles.below["wall"] |= 1;
     tiles.below["wall"] |= 2;
