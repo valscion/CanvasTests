@@ -41,7 +41,7 @@ var plr = {
   h: 24,            // Player height
   anim : "stance",  // Current player animation
   frame : 0.0,      // What frame are we currently running in the animation (will be rounded)
-  midair : true,    // Is the player currently mid-air (so that gravity affects them)
+  midair : true,    // Is the player currently mid-air (so that gravity affects)
   climbing : 0,     // Is the player currently climbing in ladders. 
                     // 0 = not, 1 = yes, 2 = yes and moves horizontally
   safex : 0,        // -- Last player x-coordinate where there was no collision
@@ -57,17 +57,27 @@ var plr = {
 //  * yPlus:    (float) current acceleration in the vertical axis
 //  * weight:   (float/int) weight in kg
 //  * midair:   (boolean) sets the object to be mid-air and receive gravity updates
-var gravObj = {
-  "player" : plr
+var gravObj = {};
+function setGravity( key, obj, startYPlus ) {
+  gravObj[key] = obj;
+  if( typeof startYPlus === 'number' ) {
+    obj.yPlus = startYPlus;
+  }
+}
+function unsetGravity( key ) {
+  if( key in gravObj ) {
+    gravObj[key].yPlus = 0;
+    delete gravObj[key];
+  }
 }
 
 // Store information about tiles on sides and under the player
 var tiles = {
-  left : [],
-  right : [],
-  above : [],
-  below : [],
-  under : []
+  left : null,
+  right : null,
+  above : null,
+  below : null,
+  under : null
 }
 
 // Object to fit all sprites in
@@ -92,8 +102,7 @@ var levels = {
     dataImg : null,
     tileMap : null,
     w : null,
-    h : null,
-    crumbles : {}
+    h : null
   }
 }
 var levelsLoaded = 0;
@@ -291,17 +300,17 @@ $("body").click( function(e) {
 });
 
 // Creating a new animation timer and appending it to the animTimers-object
-function createAnimTimer( key, speed, maxValue ) {
+function createAnimTimer( key, speed, maxValue, destroy ) {
   animTimers[key] = {};
   
-  var tmpSpeed = speed * maxValue;
+  var tmpSpeed = maxValue / speed;
+  var tmpDestroy = ( typeof destroy === "boolean" ) ? destroy : false;
   
   animTimers[key].toggled = false;       // Is timer toggled
   animTimers[key].value = 0.0;           // Current value of the timer (from 0.0 to maxValue)
-  animTimers[key].running = false;       // Is the timer running
-  animTimers[key].speed = speed;         // How fast does timer go from 0.0 to maxValue in seconds
+  animTimers[key].speed = tmpSpeed;      // How fast does timer go from 0.0 to maxValue in seconds
   animTimers[key].maxValue = maxValue    // Highest possible value. After this, reset value to 0.0
-  animTimers[key].mod = 1;               // Are we going higher or lower (only used if oscillating)
+  animTimers[key].destroy = tmpDestroy;  // Should the timer be deleted after reaching maxValue
 }
 var animTimers = {};
 
@@ -329,12 +338,12 @@ function render() {
   
   /* // Draw some text
   // ...add some flash
-  var tmp = Math.round( 64.0 + animTimers.maintext.val * 191 );
+  var tmp = Math.round( 64.0 + animTimers.maintext.value * 191 );
   ctx.fillStyle = "rgb("+tmp+","+tmp+","+tmp+")";
   ctx.font = "24px Helvetica";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  var tmp = Math.round( 64.0 + animTimers.maintext.val * 191 );
+  var tmp = Math.round( 64.0 + animTimers.maintext.value * 191 );
   ctx.fillText("Hei, maailma!", 0, 0);
   */
   
@@ -393,13 +402,13 @@ function update( modifier ) {
     var flash = flashes[f];
     if( flash.toggled ) {
       flash.running = true;
-      flash.value = flash.value + modifier * flash.mod * flash.speed;
+      flash.value += modifier * flash.mod * flash.speed;
       if( flash.value > 1.0 ) { flash.value = 1.0; flash.mod = -1; }
       if( flash.value < 0.0 ) { flash.value = 0.0; flash.mod = 1; }
     }
     else if( flash.running ) {
       flash.mod = 1;
-      flash.value = flash.value - modifier * flash.speed;
+      flash.value -= modifier * flash.speed;
       if( flash.value < 0.0 ) {
         flash.value = 0.0;
         flash.running = false;
@@ -414,8 +423,15 @@ function update( modifier ) {
   for( a in animTimers ) {
     var anim = animTimers[a];
     if( anim.toggled ) {
-      anim.value = anim.value + modifier * anim.speed;
-      if( anim.value > anim.maxValue ) { anim.value = 0.0; }
+      anim.value += modifier * anim.speed;
+      if( anim.value > anim.maxValue ) { 
+        if( anim.destroy ) {
+          delete animTimers[a];
+        }
+        else { 
+          anim.value = 0.0; 
+        }
+      }
     }
   }
   
@@ -446,12 +462,20 @@ function update( modifier ) {
   // Update keys that control player
   updatePlayerControls( modifier );
   
-  // Check whether we are on anything solid or climbing and if not, we're mid-air.
-  if( !("wall" in tiles.below)
-       && !plr.climbing 
-       && ( !("ladders" in tiles.below) || ("ladders" in tiles.under) ) )
-  {
-    plr.midair = true;
+  
+  if( !plr.climbing ) {
+    // Check whether we are on anything solid and if not, we're mid-air.
+    if( !inTile("below","solid")
+         && ( !("ladders" in tiles.below) || ("ladders" in tiles.under) ) )
+    {
+      plr.midair = true;
+    }
+    // Otherwise check if we're under a crumbling wall and if so,
+    // cheat the mapcollision-system to think that we hit it by setting
+    // player's y-coordinate to one pixel higher
+    else if ( "crumblingwall" in tiles.below ) {
+      plr.y += 1;
+    }
   }
   
   // Check frame limits
@@ -493,11 +517,11 @@ function update( modifier ) {
     }
   }
   
-  // Update camera movement et cetera
-  updateCamera();
-  
   // Update screen/canvas width and height
   updateScreenDimensions();
+  
+  // Update camera movement et cetera
+  updateCamera();
 
   // Position the canvas according to camera.x and camera.y
   ctx.restore();
@@ -806,43 +830,73 @@ function checkMapCollisions() {
     return {};
   }
   
-  var tileMap = levels[levels.current].tileMap;
+  var level = levels[levels.current];
+  var tileMap = level.tileMap;
   
   var hitDirections = {};
   
-  try {
-    var checkTile = tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )];
-    if( typeof checkTile === 'undefined' || checkTile == "wall" ) {
-      // We are hitting a wall from below and right
-      if( "wall" in tiles.below ) hitDirections["below"] = true;
-      if( "wall" in tiles.right ) hitDirections["right"] = true;
-    }
-    checkTile = tileMap[Math.round((plr.x + (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )];
-    if( typeof checkTile === 'undefined' || checkTile == "wall" ) {
-      // We are hitting a wall from above and right
-      if( "wall" in tiles.above ) hitDirections["above"] = true;
-      if( "wall" in tiles.right ) hitDirections["right"] = true;
-    }
-    checkTile = tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y + plr.h/2) / 24 )];
-    if( typeof checkTile === 'undefined' || checkTile == "wall" ) {
-      // We are hitting a wall from below and left
-      if( "wall" in tiles.below ) hitDirections["below"] = true;
-      if( "wall" in tiles.left ) hitDirections["left"] = true;
-    }
-    checkTile = tileMap[Math.round((plr.x - (plr.w-1)/2) / 16 )][Math.round((plr.y - plr.h/2) / 24 )];
-    if( typeof checkTile === 'undefined' || checkTile == "wall" ) {
-      // We are hitting a wall from above and left
-      if( "wall" in tiles.above ) hitDirections["above"] = true;
-      if( "wall" in tiles.left ) hitDirections["left"] = true;
-    }
-  }
-  catch(e) {
-    // Probably the tileMaps x-coordinate was malformed. Let's just set
-    // all directions as if we had hit them.
+  
+  var leftX = Math.round((plr.x - (plr.w-1)/2) / 16 );
+  var rightX = Math.round((plr.x + (plr.w-1)/2) / 16 );
+  var aboveY = Math.round((plr.y - plr.h/2) / 24 );
+  var belowY = Math.round((plr.y + plr.h/2) / 24 );
+  
+  // Check that we won't read over/under tileMap
+  if( leftX < 0 || leftX >= level.w
+      || rightX < 0 || rightX >= level.w
+      || aboveY < 0 || aboveY >= level.h
+      || belowY < 0 || belowY >= level.h )
+  {
+    // Let's just set all directions as if we had hit them.
     hitDirections["below"] = true;
     hitDirections["above"] = true;
     hitDirections["left"] = true;
     hitDirections["right"] = true;
+  }
+  // If we won't read over/under tileMap, go ahead and check collisions.
+  else {
+    var checkTile;
+    checkTile = tileMap[leftX][aboveY];
+    if( checkTile == "wall" || checkTile == "crumblingwall" ) {
+      // We are hitting a wall from left and above
+      if( inTile( "left", "solid" ) ) hitDirections["left"] = true;
+      if( inTile( "above", "solid" ) ) hitDirections["above"] = true;
+      
+      // If we hit crumblign wall, set its timer on so it will crumble!
+      if( checkTile == "crumblingwall" ) {
+        animTimers["crumble("+leftX+","+aboveY+")"].toggled = true;
+      }
+    }
+    checkTile = tileMap[leftX][belowY];
+    if( checkTile == "wall" || checkTile == "crumblingwall" ) {
+      // We are hitting a wall from left and below
+      if( inTile( "left", "solid" ) ) hitDirections["left"] = true;
+      if( inTile( "below", "solid" ) ) hitDirections["below"] = true;
+      
+      if( checkTile == "crumblingwall" ) {
+        animTimers["crumble("+leftX+","+belowY+")"].toggled = true;
+      }
+    }
+    checkTile = tileMap[rightX][aboveY];
+    if( checkTile == "wall" || checkTile == "crumblingwall" ) {
+      // We are hitting a wall from right and above
+      if( inTile( "right", "solid" ) ) hitDirections["right"] = true;
+      if( inTile( "above", "solid" ) ) hitDirections["above"] = true;
+      
+      if( checkTile == "crumblingwall" ) {
+        animTimers["crumble("+rightX+","+aboveY+")"].toggled = true;
+      }
+    }
+    checkTile = tileMap[rightX][belowY];
+    if( checkTile == "wall" || checkTile == "crumblingwall" ) {
+      // We are hitting a wall from right and below
+      if( inTile( "right", "solid" ) ) hitDirections["right"] = true;
+      if( inTile( "below", "solid" ) ) hitDirections["below"] = true;
+      
+      if( checkTile == "crumblingwall" ) {
+        animTimers["crumble("+rightX+","+belowY+")"].toggled = true;
+      }
+    }
   }
     
   // Only restrict player's horizontal movement if there's collisions on sides
@@ -932,8 +986,14 @@ function playLevel( level ) {
     }
     // If that was a crumbling wall, set it's timer
     else if( tile == "crumblingwall" ) {
-      levels[lvl].crumbles[x] = {};
-      levels[lvl].crumbles[x][y] = 0.0;
+      createAnimTimer( "crumble("+x+","+y+")", 1.0, 8.99, true );
+    }
+    // Or if that was a coin, set it's animation timer
+    else if( tile == "coin" ) {
+      // Speed is a random value from 0.5 to 1.5
+      var speed = Math.floor( Math.random()*11 ) / 10 + 0.5;
+      createAnimTimer( "coin("+x+","+y+")", speed, 5.99 );
+      animTimers["coin("+x+","+y+")"].toggled = true;
     }
     
     ++x;
@@ -947,8 +1007,6 @@ function playLevel( level ) {
   levels[lvl].w = width;
   levels[lvl].h = height;
   
-  animTimers["coins"].toggled = true;
-  animTimers["coins"].value = 0.0;
   return true;
 }
 
@@ -959,8 +1017,6 @@ function drawCurrentLevel( ) {
   }
   var level = levels[levels.current];
   var tileMap = level.tileMap;
-  
-  var coinFrame = Math.round( animTimers["coins"].value );
   
   // Limit those loops to draw only those tiles that are visible
   
@@ -979,11 +1035,20 @@ function drawCurrentLevel( ) {
         ctx.drawImage( sprites.ladders, 0, 0, 16, 24, x*16, y*24, 16, 24 );
       }
       else if( tileMap[x][y] == "coin" ) {
+        var coinFrame = Math.floor( animTimers["coin("+x+","+y+")"].value );
         ctx.drawImage( sprites.coin, coinFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
       }
       else if( tileMap[x][y] == "crumblingwall" ) {
-        var crumbleFrame = Math.round( level.crumbles[x][y] * 8 );
-        ctx.drawImage( sprites.walls, crumbleFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
+        var crumbleTimer = animTimers["crumble("+x+","+y+")"];
+        if( typeof crumbleTimer === "undefined" ) {
+          // We have gone through the timer already, so we need to delete
+          // the already-crumbled wall from the tilemap.
+          tileMap[x][y] = "";
+        }
+        else {
+          var crumbleFrame = Math.floor( crumbleTimer.value );
+          ctx.drawImage( sprites.walls, crumbleFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
+        }
       }
       ++y;
     }
@@ -1045,6 +1110,9 @@ function updateNearbyTiles() {
   */
   
   // Reset tiles
+  for( t in tiles ) {
+    delete tiles[t];
+  }
   tiles.under = {};
   tiles.left = {};
   tiles.right = {};
@@ -1132,17 +1200,33 @@ function getObjectAsString( obj ) {
 
 // Reset
 function reset() {
-  for( f in animTimers ) {
-    var flash = animTimers[f];
-    flash.toggled = false;
-    flash.val = 0.0;
-    flash.mod = 1;
-    flash.running = false;
+  // Delete flashes
+  for( f in flashes ) {
+    delete flashes[f];
   }
   
-  // Put the dude in the middle of the screen
-  plr.x = ( scr.w - plr.w ) / 2 + scr.x;
-  plr.y = ( scr.h - plr.h ) / 2 + scr.y;
+  // Delete animTimers
+  for( a in animTimers ) {
+    delete animTimers[a];
+  }
+  
+  // Reset nearby tiles
+  for( t in tiles ) {
+    delete tiles[t];
+  }
+  tiles.under = {};
+  tiles.left = {};
+  tiles.right = {};
+  tiles.above = {};
+  tiles.below = {};
+  
+  // Unset gravitys
+  for ( g in gravObj ) {
+    unsetGravity(g);
+  }
+  
+  // Set gravity for player
+  setGravity( "player", plr );
 }
 
 // Main loop
@@ -1176,7 +1260,6 @@ var main = function () {
 // Run it!
 loadSprites();
 loadLevels();
-// reset();
-createAnimTimer( "coins", 1.0, 5.49 );
+reset();
 var then = Date.now();
 var mainInterval = setInterval(main, 10); // Run (almost) as fast as possible
