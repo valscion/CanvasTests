@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <head>
-  <base href="http://vesq.org/canvas/" />
+  <base href="http://vesq.org/canvas/platformer/" />
 
   <title>VesQ.org - canvas stuff</title>
   <meta name="description" content="Vesa &quot;VesQ&quot; Laakson kotisivut." />
@@ -38,10 +38,10 @@
   
   <!-- Grab Google CDN's jQuery, with a protocol relative URL; fall back to local if necessary -->
   <script src="//ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
-  <script>window.jQuery || document.write("<script src='libs/jquery-1.6.4.min.js'>\x3C/script>")</script>
+  <script>window.jQuery || document.write("<script src='../libs/jquery-1.6.4.min.js'>\x3C/script>")</script>
 
   <!-- Kinetic 2d, http://www.kineticjs.com/ -->
-  <script src="libs/kinetic2d-v1.0.2.js"></script>
+  <script src="../libs/kinetic2d-v1.0.2.js"></script>
   
   <script src="scripts.js?trick=<?=filemtime('scripts.js')?>"></script>
   
