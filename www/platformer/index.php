@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <head>
-  <base href="http://vesq.org/canvas/devplatformer/" />
+  <base href="http://vesq.org/canvas/platformer/" />
 
   <title>VesQ.org - canvas stuff</title>
   <meta name="description" content="Vesa &quot;VesQ&quot; Laakson kotisivut." />
