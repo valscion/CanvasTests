@@ -111,10 +111,10 @@ var levelsAmount = 1;
 
 // Object for drawing stuff as debug info
 var debugObj = {}
-var DEBUG = true;
+var DEBUG = false;
 
 // Constant for gravity
-const GRAVITY = 800;
+var GRAVITY = 800;
 
 // Create the canvas
 var canvas = document.createElement("canvas");
@@ -439,7 +439,7 @@ function update( modifier ) {
   if( 16 in keysDown && 68 in keysDown ) { // -- Shift + [D] --
     // Toggle debug
     DEBUG = !DEBUG;
-    log('inside update','DEBUG toggled to ' + DEBUG);
+    log('DEBUG toggled to ' + DEBUG);
     delete keysDown[68];
   }
   
@@ -465,12 +465,6 @@ function update( modifier ) {
     {
       plr.midair = true;
     }
-    // Otherwise check if we're under a crumbling wall and if so,
-    // cheat the mapcollision-system to think that we hit it by setting
-    // player's y-coordinate to one pixel higher
-    else if ( "crumblingwall" in tiles.below ) {
-      plr.y += 1;
-    }
   }
   
   // Check frame limits
@@ -487,13 +481,7 @@ function update( modifier ) {
   if(DEBUG) debugObj["Hit wall"] = false;
   if( Object.keys(hitDirections).length > 0 ) {
     if(DEBUG) debugObj["Hit wall"] = getObjectAsString( hitDirections );
-    if( "below" in hitDirections && plr.yPlus <= 0 ) {
-      // If we hit something solid from the bottom, position the player
-      // directly above it so that one doesn't just float around.
-      plr.y = Math.ceil( plr.y / 24 ) * 24 - 1;
-      plr.midair = false;
-    }
-    else if ( "above" in hitDirections && plr.yPlus > 0 ) {
+    if ( "above" in hitDirections && plr.yPlus > 0 ) {
       // We hit the ceiling so stop going up
       plr.yPlus = 0.0;
     }
@@ -642,9 +630,18 @@ function updatePlayerControls( modifier ) {
       }
     }
     else {
-      // We were climbing so animate the player and move it.
-      plr.frame += plr.speed * modifier / 12;
-      yMove -= plr.speed/2 * modifier;
+      // We were climbing so animate the player and move it, if we are on ladders.
+      if( "ladders" in tiles.under ) {
+        plr.frame += plr.speed * modifier / 12;
+        yMove -= plr.speed/2 * modifier;
+      }
+      else {
+        // We moved off the ladders, so position the player directly above them.
+        plr.y = Math.floor( (plr.y+1) / 24 ) * 24;
+        plr.frame = 0;
+        plr.climbing = false;
+        yMove = 0;
+      }
     }
   } 
   else if (40 in keysDown) { // -- Down arrow --
@@ -687,9 +684,16 @@ function updatePlayerControls( modifier ) {
       }
     }
     else {
-      // We were climbing so animate the player and move it.
-      plr.frame -= plr.speed * modifier / 12;
-      yMove += plr.speed/2 * modifier;
+      // We were climbing so animate the player and move it, if we are on ladders.
+      if( "ladders" in tiles.under || "ladders" in tiles.below ) {
+        plr.frame -= plr.speed * modifier / 12;
+        yMove += plr.speed/2 * modifier;
+      }
+      else {
+        plr.frame = 0;
+        plr.climbing = false;
+        yMove = 0;
+      }
     }
   }
   
@@ -701,7 +705,7 @@ function updatePlayerControls( modifier ) {
   
   // JUMP
   if( 90 in keysDown ) { // [Z]
-    if( !plr.midair && plr.climbing == 0 ) {
+    if( !plr.midair && !plr.climbing && !inTile("above","solid") ) {
       plr.yPlus = plr.jumpPower / plr.weight;
       plr.midair = true;
       // Decide what animation to play
@@ -713,7 +717,7 @@ function updatePlayerControls( modifier ) {
       }
       else {
         // If we're not moving anywhere, play something else than "stance" animation.
-        plr.anim = "jumpleft";
+        plr.anim = "jumpright";
       }
     }
   }
@@ -849,7 +853,7 @@ function updateScreenDimensions() {
 }
 
 // Update collisions with map
-function checkMapCollisions() {
+function checkMapCollisionsOld() {
   if ( !allLevelsLoaded ) {
     return {};
   }
@@ -941,6 +945,60 @@ function checkMapCollisions() {
   else {
     plr.safey = plr.y;
   }
+  
+  return hitDirections;
+}
+
+function checkMapCollisions() {
+  if ( !allLevelsLoaded ) {
+    return {};
+  }
+  
+  var level = levels[levels.current];
+  var tileMap = level.tileMap;
+  
+  var hitDirections = {};
+  
+  if( inTile("below", "solid") ) {
+    hitDirections["below"] = true;
+  }
+  if( inTile("above", "solid") ) {
+    if( plr.y < plr.safey ) {
+      hitDirections["above"] = true;
+    }
+  }
+  if( inTile("right", "solid") ) {
+    if( plr.x > plr.safex ) {
+      hitDirections["right"] = true;
+    }
+  }
+  if( inTile("left", "solid") ) {
+    if( plr.x < plr.safex ) {
+      hitDirections["left"] = true;
+    }
+  }
+  
+  // Only restrict player's horizontal movement if there's collisions on sides
+  if( "left" in hitDirections && plr.x < plr.safex ) {
+    plr.x = plr.safex;
+  }
+  else if( "right" in hitDirections && plr.x > plr.safex ) {
+    plr.x = plr.safex;
+  }
+  
+  // Only restrict player's vertical movement if there's collisions on above/below
+  if( "above" in hitDirections && plr.y < plr.safey ) {
+    plr.y = plr.safey;
+  }
+  else if( "below" in hitDirections ) {
+    if( plr.yPlus <= 0 && plr.y >= plr.safey ) {
+      plr.y = Math.ceil( plr.safey / 24 ) * 24;
+      plr.midair = false;
+    }
+  }
+  
+  plr.safex = plr.x;
+  plr.safey = plr.y;
   
   return hitDirections;
 }
@@ -1068,7 +1126,7 @@ function drawCurrentLevel( ) {
           // We have gone through the timer already, so we need to delete
           // the already-crumbled wall from the tilemap as well as the timer.
           tileMap[x][y] = "";
-          delete crumbleTimer;
+          delete animTimers["crumble("+x+","+y+")"];
         }
         else {
           var crumbleFrame = Math.floor( crumbleTimer.value );
@@ -1157,24 +1215,32 @@ function updateNearbyTiles() {
     tiles.right[tileMap[tileFloorX+1][tileCeilY]] |= 1;
     tiles.right[tileMap[tileFloorX+1][tileFloorY]] |= 2;
   } else {
-    tiles.right["wall"] |= 4;
-    tiles.right["wall"] |= 8;
+    tiles.right["wall"] |= 1;
+    tiles.right["wall"] |= 2;
   }
   
   if( tileCeilY > 0 ) {
     tiles.above[tileMap[tileCeilX][tileCeilY-1]] |= 2;
     tiles.above[tileMap[tileFloorX][tileCeilY-1]] |= 8;
   } else {
-    tiles.above["wall"] |= 1;
     tiles.above["wall"] |= 2;
+    tiles.above["wall"] |= 8;
   }
   
   if( tileFloorY < levels[levels.current].h ) {
     tiles.below[tileMap[tileCeilX][tileFloorY+1]] |= 1;
     tiles.below[tileMap[tileFloorX][tileFloorY+1]] |= 4;
+    if( plr.yPlus >= 0 && "crumblingwall" in tiles.below ) {
+      if( tiles.below.crumblingwall & 1 ) {
+        animTimers["crumble("+tileCeilX+","+(tileFloorY+1)+")"].toggled = true;
+      }
+      if( tiles.below.crumblingwall & 4 ) {
+        animTimers["crumble("+tileFloorX+","+(tileFloorY+1)+")"].toggled = true;
+      }
+    }
   } else {
     tiles.below["wall"] |= 1;
-    tiles.below["wall"] |= 2;
+    tiles.below["wall"] |= 4;
   }
 }
 
