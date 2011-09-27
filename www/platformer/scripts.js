@@ -272,7 +272,7 @@ function drawPlayer() {
 var keysDown = {};
 var preventKeyDefaults = true;
 
-$("body").keydown( function (e) {
+$(window.top.document).keydown( function (e) {
   keysDown[e.keyCode] = true;
   if( e.keyCode != 122 && preventKeyDefaults ) {
     // Don't prevent fullscr mode
@@ -281,7 +281,7 @@ $("body").keydown( function (e) {
   return true;
 });
 
-$("body").keyup( function (e) {
+$(window.top.document).keyup( function (e) {
   if( e.keyCode in keysDown ) {
     delete keysDown[e.keyCode];
   }
@@ -294,7 +294,7 @@ $("body").keyup( function (e) {
 
 // Handle mouse clicking
 var mouseClicked = false;
-$("body").click( function(e) {
+$(window.top.document).click( function(e) {
   e.preventDefault();
   mouseClicked = true;
 });
