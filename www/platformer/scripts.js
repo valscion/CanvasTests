@@ -117,7 +117,8 @@ var game = {
   points : 0,         // How many points does the player have
   startTime : 0,      // When did the level start
   timePassed : 0,     // How much time has passed since starting the level
-  coinsLeft : 0       // How many coins are left
+  coinsLeft : 0,      // How many coins are left
+  tileMap : null      // Current tilemap
 }
 
 // Object for drawing stuff as debug info
@@ -324,6 +325,7 @@ function render() {
   ctx.textAlign = "left";
   ctx.textBaseline = "top"
   ctx.fillText( "Coins remaining: " + game.coinsLeft, scr.x + 16, scr.y + 24 );
+  ctx.fillText( "Time passed: " + Math.floor( game.timePassed / 1000 ), scr.x+16, scr.y+40 );
   
   // Draw some debug-info
   if( DEBUG ) {
@@ -414,6 +416,13 @@ function update( modifier ) {
     }
   }
   
+  // Check if we finished the game!
+  if( game.coinsLeft <= 0 && "end" in tiles.under ) {
+    alert("Congratulations!\nYou beat the game!\nIt took you " + Math.floor( game.timePassed / 1000 ) + " seconds.");
+    forceExit = true;
+    return true;
+  }
+  
   if( 16 in keysDown && 68 in keysDown ) { // -- Shift + [D] --
     // Toggle debug
     DEBUG = !DEBUG;
@@ -478,6 +487,9 @@ function update( modifier ) {
   
   // Update camera movement et cetera
   updateCamera();
+  
+  // Update passed time
+  game.timePassed = Date.now() - game.startTime;
 
   // Position the canvas according to camera.x and camera.y
   ctx.restore();
@@ -837,7 +849,6 @@ function checkMapCollisionsOld() {
   }
   
   var level = levels[levels.current];
-  var tileMap = level.tileMap;
   
   var hitDirections = {};
   
@@ -862,7 +873,7 @@ function checkMapCollisionsOld() {
   // If we won't read over/under tileMap, go ahead and check collisions.
   else {
     var checkTile;
-    checkTile = tileMap[leftX][aboveY];
+    checkTile = game.tileMap[leftX][aboveY];
     if( checkTile == "wall" || checkTile == "crumblingwall" ) {
       // We are hitting a wall from left and above
       if( inTile( "left", "solid" ) ) hitDirections["left"] = true;
@@ -873,7 +884,7 @@ function checkMapCollisionsOld() {
         animTimers["crumble("+leftX+","+aboveY+")"].toggled = true;
       }
     }
-    checkTile = tileMap[leftX][belowY];
+    checkTile = game.tileMap[leftX][belowY];
     if( checkTile == "wall" || checkTile == "crumblingwall" ) {
       // We are hitting a wall from left and below
       if( inTile( "left", "solid" ) ) hitDirections["left"] = true;
@@ -883,7 +894,7 @@ function checkMapCollisionsOld() {
         animTimers["crumble("+leftX+","+belowY+")"].toggled = true;
       }
     }
-    checkTile = tileMap[rightX][aboveY];
+    checkTile = game.tileMap[rightX][aboveY];
     if( checkTile == "wall" || checkTile == "crumblingwall" ) {
       // We are hitting a wall from right and above
       if( inTile( "right", "solid" ) ) hitDirections["right"] = true;
@@ -893,7 +904,7 @@ function checkMapCollisionsOld() {
         animTimers["crumble("+rightX+","+aboveY+")"].toggled = true;
       }
     }
-    checkTile = tileMap[rightX][belowY];
+    checkTile = game.tileMap[rightX][belowY];
     if( checkTile == "wall" || checkTile == "crumblingwall" ) {
       // We are hitting a wall from right and below
       if( inTile( "right", "solid" ) ) hitDirections["right"] = true;
@@ -933,7 +944,6 @@ function checkMapCollisions() {
   }
   
   var level = levels[levels.current];
-  var tileMap = level.tileMap;
   
   var hitDirections = {};
   
@@ -1103,6 +1113,7 @@ function playLevel( level ) {
   game.coinsLeft = levels[lvl].coins;
   game.startTime = Date.now();
   game.timePassed = 0;
+  game.tileMap = levels[lvl].tileMap;
   
   return true;
 }
@@ -1113,7 +1124,6 @@ function drawCurrentLevel( ) {
     return false;
   }
   var level = levels[levels.current];
-  var tileMap = level.tileMap;
   
   // Limit those loops to draw only those tiles that are visible
   
@@ -1125,22 +1135,22 @@ function drawCurrentLevel( ) {
   //var x = 0, y = 0, nx = level.w, ny = level.h;
   while(x < nx ) {
     while( y < ny ) {
-      if( tileMap[x][y] == "wall" ) {
+      if( game.tileMap[x][y] == "wall" ) {
         ctx.drawImage( sprites.walls, 0, 0, 16, 24, x*16, y*24, 16, 24 );
       }
-      else if( tileMap[x][y] == "ladders" ) {
+      else if( game.tileMap[x][y] == "ladders" ) {
         ctx.drawImage( sprites.ladders, 0, 0, 16, 24, x*16, y*24, 16, 24 );
       }
-      else if( tileMap[x][y] == "coin" ) {
+      else if( game.tileMap[x][y] == "coin" ) {
         var coinFrame = Math.floor( animTimers["coin("+x+","+y+")"].value );
         ctx.drawImage( sprites.coin, coinFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
       }
-      else if( tileMap[x][y] == "crumblingwall" ) {
+      else if( game.tileMap[x][y] == "crumblingwall" ) {
         var crumbleTimer = animTimers["crumble("+x+","+y+")"];
         if( crumbleTimer.destroy == 2 ) {
           // We have gone through the timer already, so we need to delete
           // the already-crumbled wall from the tilemap as well as the timer.
-          tileMap[x][y] = "";
+          game.tileMap[x][y] = "";
           delete animTimers["crumble("+x+","+y+")"];
         }
         else {
@@ -1148,7 +1158,7 @@ function drawCurrentLevel( ) {
           ctx.drawImage( sprites.walls, crumbleFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
         }
       }
-      else if( tileMap[x][y] == "end" ) {
+      else if( game.tileMap[x][y] == "end" ) {
         // Check if we have collected all coins and show the correct frame based on it
         if( game.coinsLeft > 0 ) {
           ctx.drawImage( sprites.end, 0, 0, 16, 24, x*16, y*24, 16, 24 );
@@ -1199,11 +1209,11 @@ function tileFromColor( r, g, b, a ) {
 }
 
 // Update nearby tiles and set the info to tiles-object
+// Also pick coins
 function updateNearbyTiles() {
   if ( !allLevelsLoaded ) {
     return "";
   }
-  var tileMap = levels[levels.current].tileMap;
   var tileCeilX = Math.ceil( ( plr.x-1 ) / 16 );
   var tileFloorX = Math.floor( ( plr.x+1 ) / 16 );
   var tileCeilY = Math.ceil( ( plr.y-1 ) / 24 );
@@ -1226,38 +1236,61 @@ function updateNearbyTiles() {
   tiles.above = {};
   tiles.below = {};
   
-  tiles.under[tileMap[tileCeilX][tileCeilY]] |= 1;
-  tiles.under[tileMap[tileCeilX][tileFloorY]] |= 2;
-  tiles.under[tileMap[tileFloorX][tileCeilY]] |= 4;
-  tiles.under[tileMap[tileFloorX][tileFloorY]] |= 8;
+  tiles.under[game.tileMap[tileCeilX][tileCeilY]] |= 1;
+  tiles.under[game.tileMap[tileCeilX][tileFloorY]] |= 2;
+  tiles.under[game.tileMap[tileFloorX][tileCeilY]] |= 4;
+  tiles.under[game.tileMap[tileFloorX][tileFloorY]] |= 8;
+  
+  if( "coin" in tiles.under ) {
+    if( game.tileMap[tileCeilX][tileCeilY] == "coin"  ) {
+      --game.coinsLeft;
+      game.tileMap[tileCeilX][tileCeilY] = "";
+      delete animTimers["coin("+tileCeilX+","+tileCeilY+")"];
+    }
+    if( game.tileMap[tileCeilX][tileFloorY] == "coin" ) {
+      --game.coinsLeft;
+      game.tileMap[tileCeilX][tileFloorY] = "";
+      delete animTimers["coin("+tileCeilX+","+tileFloorY+")"];
+    }
+    if( game.tileMap[tileFloorX][tileCeilY] == "coin" ) {
+      --game.coinsLeft;
+      game.tileMap[tileFloorX][tileCeilY] = "";
+      delete animTimers["coin("+tileFloorX+","+tileCeilY+")"];
+    }
+    if( game.tileMap[tileFloorX][tileFloorY] == "coin" ) {
+      --game.coinsLeft;
+      game.tileMap[tileFloorX][tileFloorY] = "";
+      delete animTimers["coin("+tileFloorX+","+tileFloorY+")"];
+    }
+  }
   
   if( tileCeilX > 0 ) {
-    tiles.left[tileMap[tileCeilX-1][tileCeilY]] |= 4;
-    tiles.left[tileMap[tileCeilX-1][tileFloorY]] |= 8;
+    tiles.left[game.tileMap[tileCeilX-1][tileCeilY]] |= 4;
+    tiles.left[game.tileMap[tileCeilX-1][tileFloorY]] |= 8;
   } else {
     tiles.left["wall"] |= 4;
     tiles.left["wall"] |= 8;
   }
   
   if( tileFloorX < levels[levels.current].w ) {
-    tiles.right[tileMap[tileFloorX+1][tileCeilY]] |= 1;
-    tiles.right[tileMap[tileFloorX+1][tileFloorY]] |= 2;
+    tiles.right[game.tileMap[tileFloorX+1][tileCeilY]] |= 1;
+    tiles.right[game.tileMap[tileFloorX+1][tileFloorY]] |= 2;
   } else {
     tiles.right["wall"] |= 1;
     tiles.right["wall"] |= 2;
   }
   
   if( tileCeilY > 0 ) {
-    tiles.above[tileMap[tileCeilX][tileCeilY-1]] |= 2;
-    tiles.above[tileMap[tileFloorX][tileCeilY-1]] |= 8;
+    tiles.above[game.tileMap[tileCeilX][tileCeilY-1]] |= 2;
+    tiles.above[game.tileMap[tileFloorX][tileCeilY-1]] |= 8;
   } else {
     tiles.above["wall"] |= 2;
     tiles.above["wall"] |= 8;
   }
   
   if( tileFloorY < levels[levels.current].h ) {
-    tiles.below[tileMap[tileCeilX][tileFloorY+1]] |= 1;
-    tiles.below[tileMap[tileFloorX][tileFloorY+1]] |= 4;
+    tiles.below[game.tileMap[tileCeilX][tileFloorY+1]] |= 1;
+    tiles.below[game.tileMap[tileFloorX][tileFloorY+1]] |= 4;
     if( plr.yPlus >= 0 && "crumblingwall" in tiles.below ) {
       if( tiles.below.crumblingwall & 1 ) {
         animTimers["crumble("+tileCeilX+","+(tileFloorY+1)+")"].toggled = true;
