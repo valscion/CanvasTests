@@ -90,7 +90,8 @@ var sprites = {
   climb : null,
   walls : null,
   ladders : null,
-  coin : null
+  coin : null,
+  end : null
 }
 var spritesLoaded = 0;        // Amount of sprites already loaded
 var allSpritesLoaded = false; // Are all sprites loaded
@@ -102,12 +103,22 @@ var levels = {
     dataImg : null,
     tileMap : null,
     w : null,
-    h : null
+    h : null,
+    parTime : 60,     // How many seconds is counted as no negative points
+    coins : 0         // How many coins are there in the level
   }
 }
 var levelsLoaded = 0;
 var allLevelsLoaded = false;
 var levelsAmount = 1;
+
+// Game related variables
+var game = {
+  points : 0,         // How many points does the player have
+  startTime : 0,      // When did the level start
+  timePassed : 0,     // How much time has passed since starting the level
+  coinsLeft : 0       // How many coins are left
+}
 
 // Object for drawing stuff as debug info
 var debugObj = {}
@@ -141,85 +152,45 @@ kinetic.listen();
 // Load the sprites, one part is 16x24
 function loadSprites() {
   // Stance
-  sprites.stance = new Image();
-    sprites.stance.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.stance.src = "images/stance.png";
+  loadSingleSprite( "stance", "images/stance.png" );
   
   // Run right
-  sprites.runright = new Image();
-    sprites.runright.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.runright.src = "images/run_right.png";
+  loadSingleSprite( "runright", "images/run_right.png" );
   
   // Run left
-  sprites.runleft = new Image();
-    sprites.runleft.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.runleft.src = "images/run_left.png";
+  loadSingleSprite( "runleft", "images/run_left.png" );
   
   // Jump right
-  sprites.jumpright = new Image();
-    sprites.jumpright.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.jumpright.src = "images/jump_right.png";
+  loadSingleSprite( "jumpright", "images/jump_right.png" );
   
   // Jump left
-  sprites.jumpleft = new Image();
-    sprites.jumpleft.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.jumpleft.src = "images/jump_left.png";
+  loadSingleSprite( "jumpleft", "images/jump_left.png" );
   
   // Climbing
-  sprites.climb = new Image();
-    sprites.climb.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.climb.src = "images/climb.png";
+  loadSingleSprite( "climb", "images/climb.png" );
   
   // Walls
-  sprites.walls = new Image();
-    sprites.walls.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.walls.src = "images/walls.png";
+  loadSingleSprite( "walls", "images/walls.png" );
   
   // Ladders
-  sprites.ladders = new Image();
-    sprites.ladders.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.ladders.src = "images/ladders.png";
+  loadSingleSprite( "ladders", "images/ladders.png" );
   
   // Coin
-  sprites.coin = new Image();
-    sprites.coin.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
+  loadSingleSprite( "coin", "images/coin.png" );
+  
+  // End
+  loadSingleSprite( "end", "images/end.png" );
+}
+
+// Load one sprite
+function loadSingleSprite( spriteName, fileName ) {
+  sprites[spriteName] = new Image();
+  sprites[spriteName].onload = function() {
+    if( ++spritesLoaded === Object.keys(sprites).length ) {
+      allSpritesLoaded = true;
     }
-  sprites.coin.src = "images/coin.png";
+  }
+  sprites[spriteName].src = fileName;
 }
 
 // Load the levels
@@ -346,6 +317,13 @@ function render() {
   var tmp = Math.round( 64.0 + animTimers.maintext.value * 191 );
   ctx.fillText("Hei, maailma!", 0, 0);
   */
+  
+  // Draw the amount of coins remaining
+  ctx.fillStyle = "rgb(255,255,255)";
+  ctx.font = "16px Helvetica";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top"
+  ctx.fillText( "Coins remaining: " + game.coinsLeft, scr.x + 16, scr.y + 24 );
   
   // Draw some debug-info
   if( DEBUG ) {
@@ -1025,6 +1003,7 @@ function playLevel( level ) {
     case 1:
     case "1":
       levels.current = 1;
+      levels.parTime = 60;
       lvl = "1";
       break;
     default:
@@ -1032,62 +1011,98 @@ function playLevel( level ) {
   }
   
   if( levels[lvl].tileMap != null ) {
-    return true;
+    // We already have a tilemap, so reset level
+    for( var x = 0; x < levels[lvl].w; ++x ) {
+      for( var y = 0; y < levels[lvl].h; ++y ) {
+        tile = levels[lvl].tileMap[x][y];
+        
+        // If that was the startpoint, set player coordinates.
+        if( tile == "start" ) {
+          plr.x = x*16 + plr.w/2;
+          plr.y = y*24;
+        }
+        // If that was a crumbling wall, set it's timer
+        else if( tile == "crumblingwall" ) {
+          createAnimTimer( "crumble("+x+","+y+")", 1.0, 8.99, true );
+        }
+        // Or if that was a coin, set it's animation timer
+        else if( tile == "coin" ) {
+          // Speed is a random value from 0.5 to 1.5
+          var speed = Math.floor( Math.random()*11 ) / 10 + 0.5;
+          createAnimTimer( "coin("+x+","+y+")", speed, 5.99 );
+          animTimers["coin("+x+","+y+")"].toggled = true;
+        }
+      }
+    }
   }
-  
-  // ------------------------
-  // Parse level img
-  // ------------------------
-  
-  var width = levels[lvl].dataImg.width;
-  var height = levels[lvl].dataImg.height;
-  
-  tmpCanvas.width = width;
-  tmpCanvas.height = height;
-  
-  tmpCtx.drawImage( levels[lvl].dataImg, 0, 0 );
-  
-  var imageData = tmpCtx.getImageData( 0, 0, width, height );
-  var data = imageData.data;
-  
-  var tileMap = new Array( width );
-  for( var i=0; i<width; ++i ) {
-    tileMap[i] = new Array( height );
-  }
-  
-  var x = 0;
-  var y = 0;
-  for (var i = 0, n = data.length; i < n; i += 4) {
-    var tile = tileFromColor( data[i], data[i+1], data[i+2], data[i+3] );
-    tileMap[x][y] = tile;
+  else {
+    // We don't have the tilemap, so we need to create one from the image
     
-    // If that was the startpoint, set player coordinates.
-    if( tile == "start" ) {
-      plr.x = x*16 + plr.w/2;
-      plr.y = y*24;
-    }
-    // If that was a crumbling wall, set it's timer
-    else if( tile == "crumblingwall" ) {
-      createAnimTimer( "crumble("+x+","+y+")", 1.0, 8.99, true );
-    }
-    // Or if that was a coin, set it's animation timer
-    else if( tile == "coin" ) {
-      // Speed is a random value from 0.5 to 1.5
-      var speed = Math.floor( Math.random()*11 ) / 10 + 0.5;
-      createAnimTimer( "coin("+x+","+y+")", speed, 5.99 );
-      animTimers["coin("+x+","+y+")"].toggled = true;
+  
+    // ------------------------
+    // Parse level img
+    // ------------------------
+    
+    var width = levels[lvl].dataImg.width;
+    var height = levels[lvl].dataImg.height;
+    
+    tmpCanvas.width = width;
+    tmpCanvas.height = height;
+    
+    tmpCtx.drawImage( levels[lvl].dataImg, 0, 0 );
+    
+    var imageData = tmpCtx.getImageData( 0, 0, width, height );
+    var data = imageData.data;
+    
+    var tileMap = new Array( width );
+    for( var i=0; i<width; ++i ) {
+      tileMap[i] = new Array( height );
     }
     
-    ++x;
-    if( x >= width ) {
-      x = 0;
-      ++y;
+    var coins = 0;
+    
+    var x = 0;
+    var y = 0;
+    for (var i = 0, n = data.length; i < n; i += 4) {
+      var tile = tileFromColor( data[i], data[i+1], data[i+2], data[i+3] );
+      tileMap[x][y] = tile;
+      
+      // If that was the startpoint, set player coordinates.
+      if( tile == "start" ) {
+        plr.x = x*16 + plr.w/2;
+        plr.y = y*24;
+      }
+      // If that was a crumbling wall, set it's timer
+      else if( tile == "crumblingwall" ) {
+        createAnimTimer( "crumble("+x+","+y+")", 1.0, 8.99, true );
+      }
+      // Or if that was a coin, set it's animation timer and add one to "coins" variable
+      else if( tile == "coin" ) {
+        // Speed is a random value from 0.5 to 1.5
+        var speed = Math.floor( Math.random()*11 ) / 10 + 0.5;
+        createAnimTimer( "coin("+x+","+y+")", speed, 5.99 );
+        animTimers["coin("+x+","+y+")"].toggled = true;
+        
+        ++coins;
+      }
+      
+      ++x;
+      if( x >= width ) {
+        x = 0;
+        ++y;
+      }
     }
+    
+    levels[lvl].tileMap = tileMap;
+    levels[lvl].w = width;
+    levels[lvl].h = height;
+    levels[lvl].coins = coins;
   }
   
-  levels[lvl].tileMap = tileMap;
-  levels[lvl].w = width;
-  levels[lvl].h = height;
+  // Update game variables
+  game.coinsLeft = levels[lvl].coins;
+  game.startTime = Date.now();
+  game.timePassed = 0;
   
   return true;
 }
@@ -1133,6 +1148,15 @@ function drawCurrentLevel( ) {
           ctx.drawImage( sprites.walls, crumbleFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
         }
       }
+      else if( tileMap[x][y] == "end" ) {
+        // Check if we have collected all coins and show the correct frame based on it
+        if( game.coinsLeft > 0 ) {
+          ctx.drawImage( sprites.end, 0, 0, 16, 24, x*16, y*24, 16, 24 );
+        }
+        else {
+          ctx.drawImage( sprites.end, 16, 0, 16, 24, x*16, y*24, 16, 24 );
+        }
+      }
       ++y;
     }
     ++x;
@@ -1165,6 +1189,10 @@ function tileFromColor( r, g, b, a ) {
   if( r == 128 && g == 128 && b == 128 ) { // Crumbling wall
     return "crumblingwall";
     // return "wall";
+  }
+  
+  if( r == 0 && g == 255 && b == 255 ) { // End
+    return "end";
   }
   
   return "";
@@ -1307,6 +1335,12 @@ function reset() {
   tiles.above = {};
   tiles.below = {};
   
+  // Reset game variables
+  game.points = 0;
+  game.startTime = 0;
+  game.timePassed = 0;
+  game.coinsLeft = 0;
+
   // Unset gravitys
   for ( g in gravObj ) {
     unsetGravity(g);
@@ -1314,6 +1348,15 @@ function reset() {
   
   // Set gravity for player
   setGravity( "player", plr );
+}
+
+// Reset level
+function resetLevel() {
+  // First reset the game
+  reset();
+  
+  // Then load the current level again
+  playLevel( levels.current );
 }
 
 // Main loop
