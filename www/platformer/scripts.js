@@ -90,7 +90,8 @@ var sprites = {
   climb : null,
   walls : null,
   ladders : null,
-  coin : null
+  coin : null,
+  end : null
 }
 var spritesLoaded = 0;        // Amount of sprites already loaded
 var allSpritesLoaded = false; // Are all sprites loaded
@@ -102,19 +103,30 @@ var levels = {
     dataImg : null,
     tileMap : null,
     w : null,
-    h : null
+    h : null,
+    parTime : 60,     // How many seconds is counted as no negative points
+    coins : 0         // How many coins are there in the level
   }
 }
 var levelsLoaded = 0;
 var allLevelsLoaded = false;
 var levelsAmount = 1;
 
+// Game related variables
+var game = {
+  points : 0,         // How many points does the player have
+  startTime : 0,      // When did the level start
+  timePassed : 0,     // How much time has passed since starting the level
+  coinsLeft : 0,      // How many coins are left
+  tileMap : null      // Current tilemap
+}
+
 // Object for drawing stuff as debug info
 var debugObj = {}
-var DEBUG = true;
+var DEBUG = false;
 
 // Constant for gravity
-const GRAVITY = 800;
+var GRAVITY = 800;
 
 // Create the canvas
 var canvas = document.createElement("canvas");
@@ -141,85 +153,45 @@ kinetic.listen();
 // Load the sprites, one part is 16x24
 function loadSprites() {
   // Stance
-  sprites.stance = new Image();
-    sprites.stance.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.stance.src = "images/stance.png";
+  loadSingleSprite( "stance", "images/stance.png" );
   
   // Run right
-  sprites.runright = new Image();
-    sprites.runright.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.runright.src = "images/run_right.png";
+  loadSingleSprite( "runright", "images/run_right.png" );
   
   // Run left
-  sprites.runleft = new Image();
-    sprites.runleft.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.runleft.src = "images/run_left.png";
+  loadSingleSprite( "runleft", "images/run_left.png" );
   
   // Jump right
-  sprites.jumpright = new Image();
-    sprites.jumpright.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.jumpright.src = "images/jump_right.png";
+  loadSingleSprite( "jumpright", "images/jump_right.png" );
   
   // Jump left
-  sprites.jumpleft = new Image();
-    sprites.jumpleft.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.jumpleft.src = "images/jump_left.png";
+  loadSingleSprite( "jumpleft", "images/jump_left.png" );
   
   // Climbing
-  sprites.climb = new Image();
-    sprites.climb.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.climb.src = "images/climb.png";
+  loadSingleSprite( "climb", "images/climb.png" );
   
   // Walls
-  sprites.walls = new Image();
-    sprites.walls.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.walls.src = "images/walls.png";
+  loadSingleSprite( "walls", "images/walls.png" );
   
   // Ladders
-  sprites.ladders = new Image();
-    sprites.ladders.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
-    }
-  sprites.ladders.src = "images/ladders.png";
+  loadSingleSprite( "ladders", "images/ladders.png" );
   
   // Coin
-  sprites.coin = new Image();
-    sprites.coin.onload = function() { 
-      if( ++spritesLoaded == Object.keys(sprites).length ) {
-        allSpritesLoaded = true;
-      }
+  loadSingleSprite( "coin", "images/coin.png" );
+  
+  // End
+  loadSingleSprite( "end", "images/end.png" );
+}
+
+// Load one sprite
+function loadSingleSprite( spriteName, fileName ) {
+  sprites[spriteName] = new Image();
+  sprites[spriteName].onload = function() {
+    if( ++spritesLoaded === Object.keys(sprites).length ) {
+      allSpritesLoaded = true;
     }
-  sprites.coin.src = "images/coin.png";
+  }
+  sprites[spriteName].src = fileName;
 }
 
 // Load the levels
@@ -272,7 +244,7 @@ function drawPlayer() {
 var keysDown = {};
 var preventKeyDefaults = true;
 
-$("body").keydown( function (e) {
+$(window.top.document).keydown( function (e) {
   keysDown[e.keyCode] = true;
   if( e.keyCode != 122 && preventKeyDefaults ) {
     // Don't prevent fullscr mode
@@ -281,7 +253,7 @@ $("body").keydown( function (e) {
   return true;
 });
 
-$("body").keyup( function (e) {
+$(window.top.document).keyup( function (e) {
   if( e.keyCode in keysDown ) {
     delete keysDown[e.keyCode];
   }
@@ -294,7 +266,7 @@ $("body").keyup( function (e) {
 
 // Handle mouse clicking
 var mouseClicked = false;
-$("body").click( function(e) {
+$(window.top.document).click( function(e) {
   e.preventDefault();
   mouseClicked = true;
 });
@@ -346,6 +318,14 @@ function render() {
   var tmp = Math.round( 64.0 + animTimers.maintext.value * 191 );
   ctx.fillText("Hei, maailma!", 0, 0);
   */
+  
+  // Draw the amount of coins remaining
+  ctx.fillStyle = "rgb(255,255,255)";
+  ctx.font = "16px Helvetica";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top"
+  ctx.fillText( "Coins remaining: " + game.coinsLeft, scr.x + 16, scr.y + 24 );
+  ctx.fillText( "Time passed: " + Math.floor( game.timePassed / 1000 ), scr.x+16, scr.y+40 );
   
   // Draw some debug-info
   if( DEBUG ) {
@@ -436,10 +416,17 @@ function update( modifier ) {
     }
   }
   
+  // Check if we finished the game!
+  if( game.coinsLeft <= 0 && "end" in tiles.under ) {
+    alert("Congratulations!\nYou beat the game!\nIt took you " + Math.floor( game.timePassed / 1000 ) + " seconds.");
+    forceExit = true;
+    return true;
+  }
+  
   if( 16 in keysDown && 68 in keysDown ) { // -- Shift + [D] --
     // Toggle debug
     DEBUG = !DEBUG;
-    log('inside update','DEBUG toggled to ' + DEBUG);
+    log('DEBUG toggled to ' + DEBUG);
     delete keysDown[68];
   }
   
@@ -465,12 +452,6 @@ function update( modifier ) {
     {
       plr.midair = true;
     }
-    // Otherwise check if we're under a crumbling wall and if so,
-    // cheat the mapcollision-system to think that we hit it by setting
-    // player's y-coordinate to one pixel higher
-    else if ( "crumblingwall" in tiles.below ) {
-      plr.y += 1;
-    }
   }
   
   // Check frame limits
@@ -487,13 +468,7 @@ function update( modifier ) {
   if(DEBUG) debugObj["Hit wall"] = false;
   if( Object.keys(hitDirections).length > 0 ) {
     if(DEBUG) debugObj["Hit wall"] = getObjectAsString( hitDirections );
-    if( "below" in hitDirections && plr.yPlus <= 0 ) {
-      // If we hit something solid from the bottom, position the player
-      // directly above it so that one doesn't just float around.
-      plr.y = Math.ceil( plr.y / 24 ) * 24 - 1;
-      plr.midair = false;
-    }
-    else if ( "above" in hitDirections && plr.yPlus > 0 ) {
+    if ( "above" in hitDirections && plr.yPlus > 0 ) {
       // We hit the ceiling so stop going up
       plr.yPlus = 0.0;
     }
@@ -512,6 +487,9 @@ function update( modifier ) {
   
   // Update camera movement et cetera
   updateCamera();
+  
+  // Update passed time
+  game.timePassed = Date.now() - game.startTime;
 
   // Position the canvas according to camera.x and camera.y
   ctx.restore();
@@ -642,9 +620,18 @@ function updatePlayerControls( modifier ) {
       }
     }
     else {
-      // We were climbing so animate the player and move it.
-      plr.frame += plr.speed * modifier / 12;
-      yMove -= plr.speed/2 * modifier;
+      // We were climbing so animate the player and move it, if we are on ladders.
+      if( "ladders" in tiles.under ) {
+        plr.frame += plr.speed * modifier / 12;
+        yMove -= plr.speed/2 * modifier;
+      }
+      else {
+        // We moved off the ladders, so position the player directly above them.
+        plr.y = Math.floor( (plr.y+1) / 24 ) * 24;
+        plr.frame = 0;
+        plr.climbing = false;
+        yMove = 0;
+      }
     }
   } 
   else if (40 in keysDown) { // -- Down arrow --
@@ -687,9 +674,16 @@ function updatePlayerControls( modifier ) {
       }
     }
     else {
-      // We were climbing so animate the player and move it.
-      plr.frame -= plr.speed * modifier / 12;
-      yMove += plr.speed/2 * modifier;
+      // We were climbing so animate the player and move it, if we are on ladders.
+      if( "ladders" in tiles.under || "ladders" in tiles.below ) {
+        plr.frame -= plr.speed * modifier / 12;
+        yMove += plr.speed/2 * modifier;
+      }
+      else {
+        plr.frame = 0;
+        plr.climbing = false;
+        yMove = 0;
+      }
     }
   }
   
@@ -701,7 +695,7 @@ function updatePlayerControls( modifier ) {
   
   // JUMP
   if( 90 in keysDown ) { // [Z]
-    if( !plr.midair && plr.climbing == 0 ) {
+    if( !plr.midair && !plr.climbing && !inTile("above","solid") ) {
       plr.yPlus = plr.jumpPower / plr.weight;
       plr.midair = true;
       // Decide what animation to play
@@ -713,7 +707,7 @@ function updatePlayerControls( modifier ) {
       }
       else {
         // If we're not moving anywhere, play something else than "stance" animation.
-        plr.anim = "jumpleft";
+        plr.anim = "jumpright";
       }
     }
   }
@@ -849,13 +843,12 @@ function updateScreenDimensions() {
 }
 
 // Update collisions with map
-function checkMapCollisions() {
+function checkMapCollisionsOld() {
   if ( !allLevelsLoaded ) {
     return {};
   }
   
   var level = levels[levels.current];
-  var tileMap = level.tileMap;
   
   var hitDirections = {};
   
@@ -880,7 +873,7 @@ function checkMapCollisions() {
   // If we won't read over/under tileMap, go ahead and check collisions.
   else {
     var checkTile;
-    checkTile = tileMap[leftX][aboveY];
+    checkTile = game.tileMap[leftX][aboveY];
     if( checkTile == "wall" || checkTile == "crumblingwall" ) {
       // We are hitting a wall from left and above
       if( inTile( "left", "solid" ) ) hitDirections["left"] = true;
@@ -891,7 +884,7 @@ function checkMapCollisions() {
         animTimers["crumble("+leftX+","+aboveY+")"].toggled = true;
       }
     }
-    checkTile = tileMap[leftX][belowY];
+    checkTile = game.tileMap[leftX][belowY];
     if( checkTile == "wall" || checkTile == "crumblingwall" ) {
       // We are hitting a wall from left and below
       if( inTile( "left", "solid" ) ) hitDirections["left"] = true;
@@ -901,7 +894,7 @@ function checkMapCollisions() {
         animTimers["crumble("+leftX+","+belowY+")"].toggled = true;
       }
     }
-    checkTile = tileMap[rightX][aboveY];
+    checkTile = game.tileMap[rightX][aboveY];
     if( checkTile == "wall" || checkTile == "crumblingwall" ) {
       // We are hitting a wall from right and above
       if( inTile( "right", "solid" ) ) hitDirections["right"] = true;
@@ -911,7 +904,7 @@ function checkMapCollisions() {
         animTimers["crumble("+rightX+","+aboveY+")"].toggled = true;
       }
     }
-    checkTile = tileMap[rightX][belowY];
+    checkTile = game.tileMap[rightX][belowY];
     if( checkTile == "wall" || checkTile == "crumblingwall" ) {
       // We are hitting a wall from right and below
       if( inTile( "right", "solid" ) ) hitDirections["right"] = true;
@@ -945,6 +938,59 @@ function checkMapCollisions() {
   return hitDirections;
 }
 
+function checkMapCollisions() {
+  if ( !allLevelsLoaded ) {
+    return {};
+  }
+  
+  var level = levels[levels.current];
+  
+  var hitDirections = {};
+  
+  if( inTile("below", "solid") ) {
+    hitDirections["below"] = true;
+  }
+  if( inTile("above", "solid") ) {
+    if( plr.y < plr.safey ) {
+      hitDirections["above"] = true;
+    }
+  }
+  if( inTile("right", "solid") ) {
+    if( plr.x > plr.safex ) {
+      hitDirections["right"] = true;
+    }
+  }
+  if( inTile("left", "solid") ) {
+    if( plr.x < plr.safex ) {
+      hitDirections["left"] = true;
+    }
+  }
+  
+  // Only restrict player's horizontal movement if there's collisions on sides
+  if( "left" in hitDirections && plr.x < plr.safex ) {
+    plr.x = plr.safex;
+  }
+  else if( "right" in hitDirections && plr.x > plr.safex ) {
+    plr.x = plr.safex;
+  }
+  
+  // Only restrict player's vertical movement if there's collisions on above/below
+  if( "above" in hitDirections && plr.y < plr.safey ) {
+    plr.y = plr.safey;
+  }
+  else if( "below" in hitDirections ) {
+    if( plr.yPlus <= 0 && plr.y >= plr.safey ) {
+      plr.y = Math.ceil( plr.safey / 24 ) * 24;
+      plr.midair = false;
+    }
+  }
+  
+  plr.safex = plr.x;
+  plr.safey = plr.y;
+  
+  return hitDirections;
+}
+
 // Update gravity on objects that have gravity
 function updateGravity( modifier ) {
   for( o in gravObj ) {
@@ -967,6 +1013,7 @@ function playLevel( level ) {
     case 1:
     case "1":
       levels.current = 1;
+      levels.parTime = 60;
       lvl = "1";
       break;
     default:
@@ -974,62 +1021,99 @@ function playLevel( level ) {
   }
   
   if( levels[lvl].tileMap != null ) {
-    return true;
+    // We already have a tilemap, so reset level
+    for( var x = 0; x < levels[lvl].w; ++x ) {
+      for( var y = 0; y < levels[lvl].h; ++y ) {
+        tile = levels[lvl].tileMap[x][y];
+        
+        // If that was the startpoint, set player coordinates.
+        if( tile == "start" ) {
+          plr.x = x*16 + plr.w/2;
+          plr.y = y*24;
+        }
+        // If that was a crumbling wall, set it's timer
+        else if( tile == "crumblingwall" ) {
+          createAnimTimer( "crumble("+x+","+y+")", 1.0, 8.99, true );
+        }
+        // Or if that was a coin, set it's animation timer
+        else if( tile == "coin" ) {
+          // Speed is a random value from 0.5 to 1.5
+          var speed = Math.floor( Math.random()*11 ) / 10 + 0.5;
+          createAnimTimer( "coin("+x+","+y+")", speed, 5.99 );
+          animTimers["coin("+x+","+y+")"].toggled = true;
+        }
+      }
+    }
   }
-  
-  // ------------------------
-  // Parse level img
-  // ------------------------
-  
-  var width = levels[lvl].dataImg.width;
-  var height = levels[lvl].dataImg.height;
-  
-  tmpCanvas.width = width;
-  tmpCanvas.height = height;
-  
-  tmpCtx.drawImage( levels[lvl].dataImg, 0, 0 );
-  
-  var imageData = tmpCtx.getImageData( 0, 0, width, height );
-  var data = imageData.data;
-  
-  var tileMap = new Array( width );
-  for( var i=0; i<width; ++i ) {
-    tileMap[i] = new Array( height );
-  }
-  
-  var x = 0;
-  var y = 0;
-  for (var i = 0, n = data.length; i < n; i += 4) {
-    var tile = tileFromColor( data[i], data[i+1], data[i+2], data[i+3] );
-    tileMap[x][y] = tile;
+  else {
+    // We don't have the tilemap, so we need to create one from the image
     
-    // If that was the startpoint, set player coordinates.
-    if( tile == "start" ) {
-      plr.x = x*16 + plr.w/2;
-      plr.y = y*24;
-    }
-    // If that was a crumbling wall, set it's timer
-    else if( tile == "crumblingwall" ) {
-      createAnimTimer( "crumble("+x+","+y+")", 1.0, 8.99, true );
-    }
-    // Or if that was a coin, set it's animation timer
-    else if( tile == "coin" ) {
-      // Speed is a random value from 0.5 to 1.5
-      var speed = Math.floor( Math.random()*11 ) / 10 + 0.5;
-      createAnimTimer( "coin("+x+","+y+")", speed, 5.99 );
-      animTimers["coin("+x+","+y+")"].toggled = true;
+  
+    // ------------------------
+    // Parse level img
+    // ------------------------
+    
+    var width = levels[lvl].dataImg.width;
+    var height = levels[lvl].dataImg.height;
+    
+    tmpCanvas.width = width;
+    tmpCanvas.height = height;
+    
+    tmpCtx.drawImage( levels[lvl].dataImg, 0, 0 );
+    
+    var imageData = tmpCtx.getImageData( 0, 0, width, height );
+    var data = imageData.data;
+    
+    var tileMap = new Array( width );
+    for( var i=0; i<width; ++i ) {
+      tileMap[i] = new Array( height );
     }
     
-    ++x;
-    if( x >= width ) {
-      x = 0;
-      ++y;
+    var coins = 0;
+    
+    var x = 0;
+    var y = 0;
+    for (var i = 0, n = data.length; i < n; i += 4) {
+      var tile = tileFromColor( data[i], data[i+1], data[i+2], data[i+3] );
+      tileMap[x][y] = tile;
+      
+      // If that was the startpoint, set player coordinates.
+      if( tile == "start" ) {
+        plr.x = x*16 + plr.w/2;
+        plr.y = y*24;
+      }
+      // If that was a crumbling wall, set it's timer
+      else if( tile == "crumblingwall" ) {
+        createAnimTimer( "crumble("+x+","+y+")", 1.0, 8.99, true );
+      }
+      // Or if that was a coin, set it's animation timer and add one to "coins" variable
+      else if( tile == "coin" ) {
+        // Speed is a random value from 0.5 to 1.5
+        var speed = Math.floor( Math.random()*11 ) / 10 + 0.5;
+        createAnimTimer( "coin("+x+","+y+")", speed, 5.99 );
+        animTimers["coin("+x+","+y+")"].toggled = true;
+        
+        ++coins;
+      }
+      
+      ++x;
+      if( x >= width ) {
+        x = 0;
+        ++y;
+      }
     }
+    
+    levels[lvl].tileMap = tileMap;
+    levels[lvl].w = width;
+    levels[lvl].h = height;
+    levels[lvl].coins = coins;
   }
   
-  levels[lvl].tileMap = tileMap;
-  levels[lvl].w = width;
-  levels[lvl].h = height;
+  // Update game variables
+  game.coinsLeft = levels[lvl].coins;
+  game.startTime = Date.now();
+  game.timePassed = 0;
+  game.tileMap = levels[lvl].tileMap;
   
   return true;
 }
@@ -1040,7 +1124,6 @@ function drawCurrentLevel( ) {
     return false;
   }
   var level = levels[levels.current];
-  var tileMap = level.tileMap;
   
   // Limit those loops to draw only those tiles that are visible
   
@@ -1052,27 +1135,36 @@ function drawCurrentLevel( ) {
   //var x = 0, y = 0, nx = level.w, ny = level.h;
   while(x < nx ) {
     while( y < ny ) {
-      if( tileMap[x][y] == "wall" ) {
+      if( game.tileMap[x][y] == "wall" ) {
         ctx.drawImage( sprites.walls, 0, 0, 16, 24, x*16, y*24, 16, 24 );
       }
-      else if( tileMap[x][y] == "ladders" ) {
+      else if( game.tileMap[x][y] == "ladders" ) {
         ctx.drawImage( sprites.ladders, 0, 0, 16, 24, x*16, y*24, 16, 24 );
       }
-      else if( tileMap[x][y] == "coin" ) {
+      else if( game.tileMap[x][y] == "coin" ) {
         var coinFrame = Math.floor( animTimers["coin("+x+","+y+")"].value );
         ctx.drawImage( sprites.coin, coinFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
       }
-      else if( tileMap[x][y] == "crumblingwall" ) {
+      else if( game.tileMap[x][y] == "crumblingwall" ) {
         var crumbleTimer = animTimers["crumble("+x+","+y+")"];
         if( crumbleTimer.destroy == 2 ) {
           // We have gone through the timer already, so we need to delete
           // the already-crumbled wall from the tilemap as well as the timer.
-          tileMap[x][y] = "";
-          delete crumbleTimer;
+          game.tileMap[x][y] = "";
+          delete animTimers["crumble("+x+","+y+")"];
         }
         else {
           var crumbleFrame = Math.floor( crumbleTimer.value );
           ctx.drawImage( sprites.walls, crumbleFrame*16, 0, 16, 24, x*16, y*24, 16, 24 );
+        }
+      }
+      else if( game.tileMap[x][y] == "end" ) {
+        // Check if we have collected all coins and show the correct frame based on it
+        if( game.coinsLeft > 0 ) {
+          ctx.drawImage( sprites.end, 0, 0, 16, 24, x*16, y*24, 16, 24 );
+        }
+        else {
+          ctx.drawImage( sprites.end, 16, 0, 16, 24, x*16, y*24, 16, 24 );
         }
       }
       ++y;
@@ -1109,15 +1201,19 @@ function tileFromColor( r, g, b, a ) {
     // return "wall";
   }
   
+  if( r == 0 && g == 255 && b == 255 ) { // End
+    return "end";
+  }
+  
   return "";
 }
 
 // Update nearby tiles and set the info to tiles-object
+// Also pick coins
 function updateNearbyTiles() {
   if ( !allLevelsLoaded ) {
     return "";
   }
-  var tileMap = levels[levels.current].tileMap;
   var tileCeilX = Math.ceil( ( plr.x-1 ) / 16 );
   var tileFloorX = Math.floor( ( plr.x+1 ) / 16 );
   var tileCeilY = Math.ceil( ( plr.y-1 ) / 24 );
@@ -1140,41 +1236,72 @@ function updateNearbyTiles() {
   tiles.above = {};
   tiles.below = {};
   
-  tiles.under[tileMap[tileCeilX][tileCeilY]] |= 1;
-  tiles.under[tileMap[tileCeilX][tileFloorY]] |= 2;
-  tiles.under[tileMap[tileFloorX][tileCeilY]] |= 4;
-  tiles.under[tileMap[tileFloorX][tileFloorY]] |= 8;
+  tiles.under[game.tileMap[tileCeilX][tileCeilY]] |= 1;
+  tiles.under[game.tileMap[tileCeilX][tileFloorY]] |= 2;
+  tiles.under[game.tileMap[tileFloorX][tileCeilY]] |= 4;
+  tiles.under[game.tileMap[tileFloorX][tileFloorY]] |= 8;
+  
+  if( "coin" in tiles.under ) {
+    if( game.tileMap[tileCeilX][tileCeilY] == "coin"  ) {
+      --game.coinsLeft;
+      game.tileMap[tileCeilX][tileCeilY] = "";
+      delete animTimers["coin("+tileCeilX+","+tileCeilY+")"];
+    }
+    if( game.tileMap[tileCeilX][tileFloorY] == "coin" ) {
+      --game.coinsLeft;
+      game.tileMap[tileCeilX][tileFloorY] = "";
+      delete animTimers["coin("+tileCeilX+","+tileFloorY+")"];
+    }
+    if( game.tileMap[tileFloorX][tileCeilY] == "coin" ) {
+      --game.coinsLeft;
+      game.tileMap[tileFloorX][tileCeilY] = "";
+      delete animTimers["coin("+tileFloorX+","+tileCeilY+")"];
+    }
+    if( game.tileMap[tileFloorX][tileFloorY] == "coin" ) {
+      --game.coinsLeft;
+      game.tileMap[tileFloorX][tileFloorY] = "";
+      delete animTimers["coin("+tileFloorX+","+tileFloorY+")"];
+    }
+  }
   
   if( tileCeilX > 0 ) {
-    tiles.left[tileMap[tileCeilX-1][tileCeilY]] |= 4;
-    tiles.left[tileMap[tileCeilX-1][tileFloorY]] |= 8;
+    tiles.left[game.tileMap[tileCeilX-1][tileCeilY]] |= 4;
+    tiles.left[game.tileMap[tileCeilX-1][tileFloorY]] |= 8;
   } else {
     tiles.left["wall"] |= 4;
     tiles.left["wall"] |= 8;
   }
   
   if( tileFloorX < levels[levels.current].w ) {
-    tiles.right[tileMap[tileFloorX+1][tileCeilY]] |= 1;
-    tiles.right[tileMap[tileFloorX+1][tileFloorY]] |= 2;
+    tiles.right[game.tileMap[tileFloorX+1][tileCeilY]] |= 1;
+    tiles.right[game.tileMap[tileFloorX+1][tileFloorY]] |= 2;
   } else {
-    tiles.right["wall"] |= 4;
-    tiles.right["wall"] |= 8;
+    tiles.right["wall"] |= 1;
+    tiles.right["wall"] |= 2;
   }
   
   if( tileCeilY > 0 ) {
-    tiles.above[tileMap[tileCeilX][tileCeilY-1]] |= 2;
-    tiles.above[tileMap[tileFloorX][tileCeilY-1]] |= 8;
+    tiles.above[game.tileMap[tileCeilX][tileCeilY-1]] |= 2;
+    tiles.above[game.tileMap[tileFloorX][tileCeilY-1]] |= 8;
   } else {
-    tiles.above["wall"] |= 1;
     tiles.above["wall"] |= 2;
+    tiles.above["wall"] |= 8;
   }
   
   if( tileFloorY < levels[levels.current].h ) {
-    tiles.below[tileMap[tileCeilX][tileFloorY+1]] |= 1;
-    tiles.below[tileMap[tileFloorX][tileFloorY+1]] |= 4;
+    tiles.below[game.tileMap[tileCeilX][tileFloorY+1]] |= 1;
+    tiles.below[game.tileMap[tileFloorX][tileFloorY+1]] |= 4;
+    if( plr.yPlus >= 0 && "crumblingwall" in tiles.below ) {
+      if( tiles.below.crumblingwall & 1 ) {
+        animTimers["crumble("+tileCeilX+","+(tileFloorY+1)+")"].toggled = true;
+      }
+      if( tiles.below.crumblingwall & 4 ) {
+        animTimers["crumble("+tileFloorX+","+(tileFloorY+1)+")"].toggled = true;
+      }
+    }
   } else {
     tiles.below["wall"] |= 1;
-    tiles.below["wall"] |= 2;
+    tiles.below["wall"] |= 4;
   }
 }
 
@@ -1241,6 +1368,12 @@ function reset() {
   tiles.above = {};
   tiles.below = {};
   
+  // Reset game variables
+  game.points = 0;
+  game.startTime = 0;
+  game.timePassed = 0;
+  game.coinsLeft = 0;
+
   // Unset gravitys
   for ( g in gravObj ) {
     unsetGravity(g);
@@ -1248,6 +1381,15 @@ function reset() {
   
   // Set gravity for player
   setGravity( "player", plr );
+}
+
+// Reset level
+function resetLevel() {
+  // First reset the game
+  reset();
+  
+  // Then load the current level again
+  playLevel( levels.current );
 }
 
 // Main loop
