@@ -2,6 +2,12 @@
  * Author: Vesa "VesQ" Laakso
  */
 
+// Path to scripts folder is set via variable 'scripts_root'
+// var scripts_root = "http://www.example.com/scripts/platformer/"
+
+/* Allow logging. The script underneath should be applied to the current document */
+/*
+
 // usage: log('inside coolFunc', this, arguments);
 // paulirish.com/2009/log-a-lightweight-wrapper-for-consolelog/
 window.log = function(){
@@ -12,6 +18,7 @@ window.log = function(){
 // make it safe to use console.log always
 (function(b){function c(){}for(var d="assert,count,debug,dir,dirxml,error,exception,group,groupCollapsed,groupEnd,info,log,markTimeline,profile,profileEnd,time,timeEnd,trace,warn".split(","),a;a=d.pop();)b[a]=b[a]||c})(window.console=window.console||{});
 
+*/
 
 // Information about screen
 var scr = {
@@ -191,7 +198,7 @@ function loadSingleSprite( spriteName, fileName ) {
       allSpritesLoaded = true;
     }
   }
-  sprites[spriteName].src = fileName;
+  sprites[spriteName].src = scripts_root + fileName;
 }
 
 // Load the levels
@@ -202,7 +209,7 @@ function loadLevels() {
         allLevelsLoaded = true;
       }
     }
-  levels["1"].dataImg.src = "images/levels/1/data.png";
+  levels["1"].dataImg.src = scripts_root + "images/levels/1/data.png";
 }
 
 // Draw player
@@ -242,7 +249,7 @@ function drawPlayer() {
 
 // Handle keyboard controls
 var keysDown = {};
-var preventKeyDefaults = true;
+var preventKeyDefaults = false;
 
 $(window.top.document).keydown( function (e) {
   keysDown[e.keyCode] = true;
@@ -267,7 +274,7 @@ $(window.top.document).keyup( function (e) {
 // Handle mouse clicking
 var mouseClicked = false;
 $(window.top.document).click( function(e) {
-  e.preventDefault();
+  //e.preventDefault();
   mouseClicked = true;
 });
 
